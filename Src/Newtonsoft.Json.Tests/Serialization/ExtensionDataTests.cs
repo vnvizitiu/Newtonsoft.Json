@@ -29,11 +29,8 @@ using System.IO;
 using System.Text;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Tests.TestObjects;
-#if NETFX_CORE
-using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
-using TestFixture = Microsoft.VisualStudio.TestPlatform.UnitTestFramework.TestClassAttribute;
-using Test = Microsoft.VisualStudio.TestPlatform.UnitTestFramework.TestMethodAttribute;
-#elif DNXCORE50
+using Newtonsoft.Json.Tests.TestObjects.Organization;
+#if DNXCORE50
 using Xunit;
 using Test = Xunit.FactAttribute;
 using Assert = Newtonsoft.Json.Tests.XUnitAssert;
@@ -374,6 +371,40 @@ namespace Newtonsoft.Json.Tests.Serialization
             Assert.AreEqual(7, c.ExtensionData.Count);
         }
 
+        [JsonObject(MemberSerialization.OptIn)]
+        public class MyClass
+        {
+            public int NotForJson { get; set; }
+
+            [JsonPropertyAttribute(Required = Required.Always)]
+            public int ForJson { get; set; }
+
+            [JsonExtensionData(ReadData = true, WriteData = true)]
+            public IDictionary<String, JToken> ExtraInfoJson { get; set; }
+
+            public MyClass(MyClass other = null)
+            {
+                if (other != null)
+                {
+                    // copy construct
+                }
+            }
+        }
+
+        [Test]
+        public void PopulateWithExtensionData()
+        {
+            string jsonStirng = @"{ ""ForJson"" : 33 , ""extra1"" : 11, ""extra2"" : 22 }";
+
+            MyClass c = new MyClass();
+
+            JsonConvert.PopulateObject(jsonStirng, c);
+
+            Assert.AreEqual(2, c.ExtraInfoJson.Count);
+            Assert.AreEqual(11, (int)c.ExtraInfoJson["extra1"]);
+            Assert.AreEqual(22, (int)c.ExtraInfoJson["extra2"]);
+        }
+
         public class MultipleExtensionDataAttributesTestClass
         {
             public string Name { get; set; }
@@ -576,7 +607,7 @@ namespace Newtonsoft.Json.Tests.Serialization
   ""Name"": ""Name!"",
   ""Test"": 1,
   ""Self"": {
-    ""$type"": ""Newtonsoft.Json.Tests.TestObjects.WagePerson, Newtonsoft.Json.Tests"",
+    ""$type"": ""Newtonsoft.Json.Tests.TestObjects.Organization.WagePerson, Newtonsoft.Json.Tests"",
     ""HourlyWage"": 2.0,
     ""Name"": null,
     ""BirthDate"": ""0001-01-01T00:00:00"",
@@ -604,7 +635,7 @@ namespace Newtonsoft.Json.Tests.Serialization
   ""Name"": ""Name!"",
   ""Test"": 1,
   ""Self"": {
-    ""$type"": ""Newtonsoft.Json.Tests.TestObjects.WagePerson, Newtonsoft.Json.Tests"",
+    ""$type"": ""Newtonsoft.Json.Tests.TestObjects.Organization.WagePerson, Newtonsoft.Json.Tests"",
     ""HourlyWage"": 2.0,
     ""Name"": null,
     ""BirthDate"": ""0001-01-01T00:00:00"",
@@ -651,7 +682,7 @@ namespace Newtonsoft.Json.Tests.Serialization
   ""$type"": ""Newtonsoft.Json.Tests.Serialization.ExtensionDataTests+PublicExtensionDataAttributeTestClass, Newtonsoft.Json.Tests"",
   ""Name"": ""Name!"",
   ""Test"": {
-    ""$type"": ""Newtonsoft.Json.Tests.TestObjects.WagePerson, Newtonsoft.Json.Tests"",
+    ""$type"": ""Newtonsoft.Json.Tests.TestObjects.Organization.WagePerson, Newtonsoft.Json.Tests"",
     ""HourlyWage"": 2.1,
     ""Name"": null,
     ""BirthDate"": ""0001-01-01T00:00:00"",

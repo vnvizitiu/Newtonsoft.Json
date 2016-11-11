@@ -24,7 +24,7 @@ namespace Newtonsoft.Json.Linq.JsonPath
     {
         public QueryOperator Operator { get; set; }
 
-        public abstract bool IsMatch(JToken t);
+        public abstract bool IsMatch(JToken root, JToken t);
     }
 
     internal class CompositeExpression : QueryExpression
@@ -36,14 +36,14 @@ namespace Newtonsoft.Json.Linq.JsonPath
             Expressions = new List<QueryExpression>();
         }
 
-        public override bool IsMatch(JToken t)
+        public override bool IsMatch(JToken root, JToken t)
         {
             switch (Operator)
             {
                 case QueryOperator.And:
                     foreach (QueryExpression e in Expressions)
                     {
-                        if (!e.IsMatch(t))
+                        if (!e.IsMatch(root, t))
                         {
                             return false;
                         }
@@ -52,7 +52,7 @@ namespace Newtonsoft.Json.Linq.JsonPath
                 case QueryOperator.Or:
                     foreach (QueryExpression e in Expressions)
                     {
-                        if (e.IsMatch(t))
+                        if (e.IsMatch(root, t))
                         {
                             return true;
                         }
@@ -69,55 +69,67 @@ namespace Newtonsoft.Json.Linq.JsonPath
         public List<PathFilter> Path { get; set; }
         public JValue Value { get; set; }
 
-        public override bool IsMatch(JToken t)
+        public override bool IsMatch(JToken root, JToken t)
         {
-            IEnumerable<JToken> pathResult = JPath.Evaluate(Path, t, false);
+            IEnumerable<JToken> pathResult = JPath.Evaluate(Path, root, t, false);
 
             foreach (JToken r in pathResult)
             {
                 JValue v = r as JValue;
-                switch (Operator)
+                if (v != null)
                 {
-                    case QueryOperator.Equals:
-                        if (v != null && EqualsWithStringCoercion(v, Value))
-                        {
+                    switch (Operator)
+                    {
+                        case QueryOperator.Equals:
+                            if (EqualsWithStringCoercion(v, Value))
+                            {
+                                return true;
+                            }
+                            break;
+                        case QueryOperator.NotEquals:
+                            if (!EqualsWithStringCoercion(v, Value))
+                            {
+                                return true;
+                            }
+                            break;
+                        case QueryOperator.GreaterThan:
+                            if (v.CompareTo(Value) > 0)
+                            {
+                                return true;
+                            }
+                            break;
+                        case QueryOperator.GreaterThanOrEquals:
+                            if (v.CompareTo(Value) >= 0)
+                            {
+                                return true;
+                            }
+                            break;
+                        case QueryOperator.LessThan:
+                            if (v.CompareTo(Value) < 0)
+                            {
+                                return true;
+                            }
+                            break;
+                        case QueryOperator.LessThanOrEquals:
+                            if (v.CompareTo(Value) <= 0)
+                            {
+                                return true;
+                            }
+                            break;
+                        case QueryOperator.Exists:
                             return true;
-                        }
-                        break;
-                    case QueryOperator.NotEquals:
-                        if (v != null && !EqualsWithStringCoercion(v, Value))
-                        {
+                    }
+                }
+                else
+                {
+                    switch (Operator)
+                    {
+                        case QueryOperator.Exists:
+                        // you can only specify primative types in a comparison
+                        // notequals will always be true
+                        case QueryOperator.NotEquals:
                             return true;
-                        }
-                        break;
-                    case QueryOperator.GreaterThan:
-                        if (v != null && v.CompareTo(Value) > 0)
-                        {
-                            return true;
-                        }
-                        break;
-                    case QueryOperator.GreaterThanOrEquals:
-                        if (v != null && v.CompareTo(Value) >= 0)
-                        {
-                            return true;
-                        }
-                        break;
-                    case QueryOperator.LessThan:
-                        if (v != null && v.CompareTo(Value) < 0)
-                        {
-                            return true;
-                        }
-                        break;
-                    case QueryOperator.LessThanOrEquals:
-                        if (v != null && v.CompareTo(Value) <= 0)
-                        {
-                            return true;
-                        }
-                        break;
-                    case QueryOperator.Exists:
-                        return true;
-                    default:
-                        throw new ArgumentOutOfRangeException();
+                    }
                 }
             }
 

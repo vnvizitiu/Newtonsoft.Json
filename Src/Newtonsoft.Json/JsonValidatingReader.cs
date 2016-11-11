@@ -25,7 +25,7 @@
 
 using System;
 using System.Collections.Generic;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE)
+#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
 using System.Numerics;
 #endif
 using Newtonsoft.Json.Linq;
@@ -495,7 +495,7 @@ namespace Newtonsoft.Json
         /// Reads the next JSON token from the stream.
         /// </summary>
         /// <returns>
-        /// true if the next token was read successfully; false if there are no more tokens to read.
+        /// <c>true</c> if the next token was read successfully; <c>false</c> if there are no more tokens to read.
         /// </returns>
         public override bool Read()
         {
@@ -840,7 +840,7 @@ namespace Newtonsoft.Json
             if (schema.DivisibleBy != null)
             {
                 bool notDivisible;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE)
+#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
                 if (value is BigInteger)
                 {
                     // not that this will lose any decimal point on DivisibleBy

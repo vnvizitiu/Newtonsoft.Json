@@ -25,7 +25,7 @@
 
 using System;
 using System.Globalization;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE)
+#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
 using System.Numerics;
 #endif
 using Newtonsoft.Json.Utilities;
@@ -221,7 +221,7 @@ namespace Newtonsoft.Json.Linq
         /// <param name="value">The <see cref="Object"/> value to write.</param>
         public override void WriteValue(object value)
         {
-#if !(NET20 || NET35 || PORTABLE || PORTABLE40)
+#if !(NET20 || NET35 || PORTABLE || PORTABLE40) || NETSTANDARD1_1
             if (value is BigInteger)
             {
                 InternalWriteValue(JsonToken.Integer);
@@ -485,5 +485,53 @@ namespace Newtonsoft.Json.Linq
             AddValue(value, JsonToken.String);
         }
         #endregion
+
+        internal override void WriteToken(JsonReader reader, bool writeChildren, bool writeDateConstructorAsDate, bool writeComments)
+        {
+            JTokenReader tokenReader = reader as JTokenReader;
+
+            // closing the token wrather than reading then writing it doesn't lose some type information, e.g. Guid, byte[], etc
+            if (tokenReader != null && writeChildren && writeDateConstructorAsDate && writeComments)
+            {
+                if (tokenReader.TokenType == JsonToken.None)
+                {
+                    if (!tokenReader.Read())
+                    {
+                        return;
+                    }
+                }
+
+                JToken value = tokenReader.CurrentToken.CloneToken();
+
+                if (_parent != null)
+                {
+                    _parent.Add(value);
+                    _current = _parent.Last;
+
+                    // if the writer was in a property then move out of it and up to its parent object
+                    if (_parent.Type == JTokenType.Property)
+                    {
+                        _parent = _parent.Parent;
+                        InternalWriteValue(JsonToken.Null);
+                    }
+                }
+                else
+                {
+                    _current = value;
+
+                    if (_token == null && _value == null)
+                    {
+                        _token = value as JContainer;
+                        _value = value as JValue;
+                    }
+                }
+
+                tokenReader.Skip();
+            }
+            else
+            {
+                base.WriteToken(reader, writeChildren, writeDateConstructorAsDate, writeComments);
+            }
+        }
     }
 }

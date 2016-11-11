@@ -26,7 +26,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE)
+#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
 using System.Numerics;
 #endif
 using Newtonsoft.Json.Utilities;
@@ -78,9 +78,9 @@ namespace Newtonsoft.Json
 
         internal static State[][] BuildStateArray()
         {
-            var allStates = StateArrayTempate.ToList();
-            var errorStates = StateArrayTempate[0];
-            var valueStates = StateArrayTempate[7];
+            List<State[]> allStates = StateArrayTempate.ToList();
+            State[] errorStates = StateArrayTempate[0];
+            State[] valueStates = StateArrayTempate[7];
 
             foreach (JsonToken valueToken in EnumUtils.GetValues(typeof(JsonToken)))
             {
@@ -532,7 +532,7 @@ namespace Newtonsoft.Json
                     break;
                 case JsonToken.Integer:
                     ValidationUtils.ArgumentNotNull(value, nameof(value));
-#if !(NET20 || NET35 || PORTABLE || PORTABLE40)
+#if !(NET20 || NET35 || PORTABLE || PORTABLE40) || NETSTANDARD1_1
                     if (value is BigInteger)
                     {
                         WriteValue((BigInteger)value);
@@ -626,7 +626,7 @@ namespace Newtonsoft.Json
             WriteToken(token, null);
         }
 
-        internal void WriteToken(JsonReader reader, bool writeChildren, bool writeDateConstructorAsDate, bool writeComments)
+        internal virtual void WriteToken(JsonReader reader, bool writeChildren, bool writeDateConstructorAsDate, bool writeComments)
         {
             int initialDepth;
 
@@ -643,11 +643,6 @@ namespace Newtonsoft.Json
                 initialDepth = reader.Depth;
             }
 
-            WriteToken(reader, initialDepth, writeChildren, writeDateConstructorAsDate, writeComments);
-        }
-
-        internal void WriteToken(JsonReader reader, int initialDepth, bool writeChildren, bool writeDateConstructorAsDate, bool writeComments)
-        {
             do
             {
                 // write a JValue date when the constructor is for a date
@@ -657,7 +652,7 @@ namespace Newtonsoft.Json
                 }
                 else
                 {
-                    if (reader.TokenType != JsonToken.Comment || writeComments)
+                    if (writeComments || reader.TokenType != JsonToken.Comment)
                     {
                         WriteToken(reader.TokenType, reader.Value);
                     }
@@ -1397,7 +1392,7 @@ namespace Newtonsoft.Json
             }
             else
             {
-#if !(NET20 || NET35 || PORTABLE || PORTABLE40)
+#if !(NET20 || NET35 || PORTABLE || PORTABLE40) || NETSTANDARD1_1
                 // this is here because adding a WriteValue(BigInteger) to JsonWriter will
                 // mean the user has to add a reference to System.Numerics.dll
                 if (value is BigInteger)
@@ -1555,7 +1550,7 @@ namespace Newtonsoft.Json
                 case PrimitiveTypeCode.TimeSpanNullable:
                     writer.WriteValue((value == null) ? (TimeSpan?)null : (TimeSpan)value);
                     break;
-#if !(PORTABLE || PORTABLE40 || NET35 || NET20)
+#if !(PORTABLE || PORTABLE40 || NET35 || NET20) || NETSTANDARD1_1
                 case PrimitiveTypeCode.BigInteger:
                     // this will call to WriteValue(object)
                     writer.WriteValue((BigInteger)value);

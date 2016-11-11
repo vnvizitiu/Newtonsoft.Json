@@ -128,6 +128,11 @@ namespace Newtonsoft.Json.Linq
             return _properties.Compare(t._properties);
         }
 
+        internal override int IndexOfItem(JToken item)
+        {
+            return _properties.IndexOfReference(item);
+        }
+
         internal override void InsertItem(int index, JToken item, bool skipParentCheck)
         {
             // don't add comments to JObject, no name to reference comment by
@@ -346,6 +351,9 @@ namespace Newtonsoft.Json.Linq
         /// </summary>
         /// <param name="reader">A <see cref="JsonReader"/> that will be read for the content of the <see cref="JObject"/>.</param>
         /// <returns>A <see cref="JObject"/> that contains the JSON that was read from the specified <see cref="JsonReader"/>.</returns>
+        /// <exception cref="JsonReaderException">
+        ///     <paramref name="reader"/> is not valid JSON.
+        /// </exception>
         public new static JObject Load(JsonReader reader)
         {
             return Load(reader, null);
@@ -358,6 +366,9 @@ namespace Newtonsoft.Json.Linq
         /// <param name="settings">The <see cref="JsonLoadSettings"/> used to load the JSON.
         /// If this is null, default load settings will be used.</param>
         /// <returns>A <see cref="JObject"/> that contains the JSON that was read from the specified <see cref="JsonReader"/>.</returns>
+        /// <exception cref="JsonReaderException">
+        ///     <paramref name="reader"/> is not valid JSON.
+        /// </exception>
         public new static JObject Load(JsonReader reader, JsonLoadSettings settings)
         {
             ValidationUtils.ArgumentNotNull(reader, nameof(reader));
@@ -390,6 +401,9 @@ namespace Newtonsoft.Json.Linq
         /// </summary>
         /// <param name="json">A <see cref="String"/> that contains JSON.</param>
         /// <returns>A <see cref="JObject"/> populated from the string that contains JSON.</returns>
+        /// <exception cref="JsonReaderException">
+        ///     <paramref name="json"/> is not valid JSON.
+        /// </exception>
         /// <example>
         ///   <code lang="cs" source="..\Src\Newtonsoft.Json.Tests\Documentation\LinqToJsonTests.cs" region="LinqToJsonCreateParse" title="Parsing a JSON Object from Text" />
         /// </example>
@@ -405,6 +419,9 @@ namespace Newtonsoft.Json.Linq
         /// <param name="settings">The <see cref="JsonLoadSettings"/> used to load the JSON.
         /// If this is null, default load settings will be used.</param>
         /// <returns>A <see cref="JObject"/> populated from the string that contains JSON.</returns>
+        /// <exception cref="JsonReaderException">
+        ///     <paramref name="json"/> is not valid JSON.
+        /// </exception>
         /// <example>
         ///   <code lang="cs" source="..\Src\Newtonsoft.Json.Tests\Documentation\LinqToJsonTests.cs" region="LinqToJsonCreateParse" title="Parsing a JSON Object from Text" />
         /// </example>
@@ -523,7 +540,7 @@ namespace Newtonsoft.Json.Linq
         /// <param name="propertyName">Name of the property.</param>
         /// <param name="value">The value.</param>
         /// <param name="comparison">One of the enumeration values that specifies how the strings will be compared.</param>
-        /// <returns>true if a value was successfully retrieved; otherwise, false.</returns>
+        /// <returns><c>true</c> if a value was successfully retrieved; otherwise, <c>false</c>.</returns>
         public bool TryGetValue(string propertyName, StringComparison comparison, out JToken value)
         {
             value = GetValue(propertyName, comparison);
@@ -556,7 +573,7 @@ namespace Newtonsoft.Json.Linq
         /// Removes the property with the specified name.
         /// </summary>
         /// <param name="propertyName">Name of the property.</param>
-        /// <returns>true if item was successfully removed; otherwise, false.</returns>
+        /// <returns><c>true</c> if item was successfully removed; otherwise, <c>false</c>.</returns>
         public bool Remove(string propertyName)
         {
             JProperty property = Property(propertyName);
@@ -574,7 +591,7 @@ namespace Newtonsoft.Json.Linq
         /// </summary>
         /// <param name="propertyName">Name of the property.</param>
         /// <param name="value">The value.</param>
-        /// <returns>true if a value was successfully retrieved; otherwise, false.</returns>
+        /// <returns><c>true</c> if a value was successfully retrieved; otherwise, <c>false</c>.</returns>
         public bool TryGetValue(string propertyName, out JToken value)
         {
             JProperty property = Property(propertyName);
@@ -689,10 +706,7 @@ namespace Newtonsoft.Json.Linq
         /// <param name="propertyName">Name of the property.</param>
         protected virtual void OnPropertyChanged(string propertyName)
         {
-            if (PropertyChanged != null)
-            {
-                PropertyChanged(this, new PropertyChangedEventArgs(propertyName));
-            }
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
 #if !(PORTABLE40 || PORTABLE || NET20)
@@ -702,10 +716,7 @@ namespace Newtonsoft.Json.Linq
         /// <param name="propertyName">Name of the property.</param>
         protected virtual void OnPropertyChanging(string propertyName)
         {
-            if (PropertyChanging != null)
-            {
-                PropertyChanging(this, new PropertyChangingEventArgs(propertyName));
-            }
+            PropertyChanging?.Invoke(this, new PropertyChangingEventArgs(propertyName));
         }
 #endif
 

@@ -35,11 +35,7 @@ using System.Linq;
 using System.Runtime.Serialization;
 using System.Text;
 using System.Xml;
-#if NETFX_CORE
-using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
-using TestFixture = Microsoft.VisualStudio.TestPlatform.UnitTestFramework.TestClassAttribute;
-using Test = Microsoft.VisualStudio.TestPlatform.UnitTestFramework.TestMethodAttribute;
-#elif DNXCORE50
+#if DNXCORE50
 using Xunit;
 using Test = Xunit.FactAttribute;
 using Assert = Newtonsoft.Json.Tests.XUnitAssert;
@@ -49,6 +45,8 @@ using NUnit.Framework;
 using Newtonsoft.Json;
 using System.IO;
 using Newtonsoft.Json.Converters;
+using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Tests.TestObjects.JsonTextReaderTests;
 using Newtonsoft.Json.Utilities;
 
 namespace Newtonsoft.Json.Tests
@@ -59,7 +57,7 @@ namespace Newtonsoft.Json.Tests
         [Test]
         public void BufferTest()
         {
-            JsonTextReaderTest.FakeArrayPool arrayPool = new JsonTextReaderTest.FakeArrayPool();
+            FakeArrayPool arrayPool = new FakeArrayPool();
 
             string longString = new string('A', 2000);
             string longEscapedString = "Hello!" + new string('!', 50) + new string('\n', 1000) + "Good bye!";
@@ -103,7 +101,7 @@ namespace Newtonsoft.Json.Tests
         [Test]
         public void BufferTest_WithError()
         {
-            JsonTextReaderTest.FakeArrayPool arrayPool = new JsonTextReaderTest.FakeArrayPool();
+            FakeArrayPool arrayPool = new FakeArrayPool();
 
             StringWriter sw = new StringWriter(CultureInfo.InvariantCulture);
 
@@ -135,6 +133,33 @@ namespace Newtonsoft.Json.Tests
             Assert.AreEqual(0, arrayPool.UsedArrays.Count);
             Assert.AreEqual(1, arrayPool.FreeArrays.Count);
         }
+
+#if !(NET20 || NET35 || NET40 || PORTABLE || PORTABLE40 || DNXCORE50)
+        [Test]
+        public void BufferErroringWithInvalidSize()
+        {
+            JObject o = new JObject
+            {
+                {"BodyHtml", "<h3>Title!</h3>" + Environment.NewLine + new string(' ', 100) + "<p>Content!</p>"}
+            };
+
+            JsonArrayPool arrayPool = new JsonArrayPool();
+
+            StringWriter sw = new StringWriter();
+            using (JsonTextWriter writer = new JsonTextWriter(sw))
+            {
+                writer.ArrayPool = arrayPool;
+
+                o.WriteTo(writer);
+            }
+
+            string result = o.ToString();
+
+            Assert.AreEqual(@"{
+  ""BodyHtml"": ""<h3>Title!</h3>\r\n                                                                                                    <p>Content!</p>""
+}", result);
+        }
+#endif
 
         [Test]
         public void NewLine()
@@ -1687,7 +1712,7 @@ null//comment
         }
     }
 
-#if !(PORTABLE || NETFX_CORE)
+#if !(PORTABLE)
     public struct ConvertibleInt : IConvertible
     {
         private readonly int _value;

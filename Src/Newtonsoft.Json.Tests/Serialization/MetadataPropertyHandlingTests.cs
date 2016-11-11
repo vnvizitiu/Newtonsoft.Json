@@ -28,13 +28,11 @@ using System.Collections.Generic;
 using System.Runtime.Serialization.Formatters;
 using System.Text;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
 using Newtonsoft.Json.Tests.TestObjects;
+using Newtonsoft.Json.Tests.TestObjects.Organization;
 using Newtonsoft.Json.Utilities;
-#if NETFX_CORE
-using Microsoft.VisualStudio.TestPlatform.UnitTestFramework;
-using TestFixture = Microsoft.VisualStudio.TestPlatform.UnitTestFramework.TestClassAttribute;
-using Test = Microsoft.VisualStudio.TestPlatform.UnitTestFramework.TestMethodAttribute;
-#elif DNXCORE50
+#if DNXCORE50
 using Xunit;
 using Test = Xunit.FactAttribute;
 using Assert = Newtonsoft.Json.Tests.XUnitAssert;
@@ -114,7 +112,6 @@ namespace Newtonsoft.Json.Tests.Serialization
             }, @"Cannot preserve reference to array or readonly list, or list created from a non-default constructor: System.String[][]. Path '$values', line 3, position 14.");
         }
 
-#if !NETFX_CORE
         [Test]
         public void SerializeDeserialize_DictionaryContextContainsGuid_DeserializesItemAsGuid()
         {
@@ -133,7 +130,7 @@ namespace Newtonsoft.Json.Tests.Serialization
             string serializedString = JsonConvert.SerializeObject(inputContext, jsonSerializerSettings);
 
             StringAssert.AreEqual(@"{
-  ""$type"": ""System.Collections.Generic.Dictionary`2[[System.String, mscorlib],[System.Guid, mscorlib]], mscorlib"",
+  ""$type"": """ + ReflectionUtils.GetTypeName(typeof(Dictionary<string, Guid>), 0, DefaultSerializationBinder.Instance) + @""",
   ""k1"": ""5dd2dba0-20c0-49f8-a054-1fa3b0a8d774""
 }", serializedString);
 
@@ -141,7 +138,6 @@ namespace Newtonsoft.Json.Tests.Serialization
 
             Assert.AreEqual(someValue, deserializedObject[contextKey]);
         }
-#endif
 
         [Test]
         public void DeserializeGuid()
@@ -165,7 +161,7 @@ namespace Newtonsoft.Json.Tests.Serialization
   ""Longitude"": -117.766684,
   ""TimeStamp"": ""2000-03-01T23:59:59Z"",
   ""Payload"": {
-    ""$type"": ""System.Byte[], mscorlib"",
+    ""$type"": """ + ReflectionUtils.GetTypeName(typeof(byte[]), 0, DefaultSerializationBinder.Instance) + @""",
     ""$value"": ""AAECAwQFBgcICQ==""
   }
 }", jsonString);
@@ -375,7 +371,9 @@ namespace Newtonsoft.Json.Tests.Serialization
             List<object> values = (List<object>)JsonConvert.DeserializeObject(json, typeof(List<object>), new JsonSerializerSettings
             {
                 TypeNameHandling = TypeNameHandling.Objects,
+#pragma warning disable 618
                 TypeNameAssemblyFormat = FormatterAssemblyStyle.Full,
+#pragma warning restore 618
                 MetadataPropertyHandling = MetadataPropertyHandling.ReadAhead
             });
 
@@ -398,7 +396,7 @@ namespace Newtonsoft.Json.Tests.Serialization
         [Test]
         public void WriteListTypeNameForProperty()
         {
-            string listRef = ReflectionUtils.GetTypeName(typeof(List<int>), FormatterAssemblyStyle.Simple, null);
+            string listRef = ReflectionUtils.GetTypeName(typeof(List<int>), TypeNameAssemblyFormatHandling.Simple, null);
 
             TypeNameHandlingTests.TypeNameProperty typeNameProperty = new TypeNameHandlingTests.TypeNameProperty
             {
@@ -528,6 +526,72 @@ namespace Newtonsoft.Json.Tests.Serialization
             JObject o = (JObject)actual.Payload;
             Assert.AreEqual("System.Byte[], mscorlib", (string)o["$type"]);
             Assert.AreEqual("AAECAwQFBgcICQ==", (string)o["$value"]);
+            Assert.AreEqual(null, o.Parent);
+        }
+
+        [Test]
+        public void ReadAhead_JObject_NoParent()
+        {
+            ItemWithUntypedPayload actual = JsonConvert.DeserializeObject<ItemWithUntypedPayload>(@"{
+  ""Payload"": {}
+}",
+                new JsonSerializerSettings
+                {
+                    MetadataPropertyHandling = MetadataPropertyHandling.ReadAhead
+                });
+
+            JObject o = (JObject)actual.Payload;
+            Assert.AreEqual(null, o.Parent);
+        }
+
+        public class ItemWithJTokens
+        {
+            public JValue Payload1 { get; set; }
+            public JObject Payload2 { get; set; }
+            public JArray Payload3 { get; set; }
+        }
+
+        [Test]
+        public void ReadAhead_TypedJValue_NoParent()
+        {
+            ItemWithJTokens actual = (ItemWithJTokens)JsonConvert.DeserializeObject(@"{
+  ""Payload1"": 1,
+  ""Payload2"": {'prop1':1,'prop2':[2]},
+  ""Payload3"": [1],
+  ""$type"": ""Newtonsoft.Json.Tests.Serialization.MetadataPropertyHandlingTests+ItemWithJTokens, Newtonsoft.Json.Tests""
+}",
+                new JsonSerializerSettings
+                {
+                    MetadataPropertyHandling = MetadataPropertyHandling.ReadAhead,
+                    TypeNameHandling = TypeNameHandling.All
+                });
+
+            Assert.AreEqual(JTokenType.Integer, actual.Payload1.Type);
+            Assert.AreEqual(1, (int)actual.Payload1);
+            Assert.AreEqual(null, actual.Payload1.Parent);
+
+            Assert.AreEqual(JTokenType.Object, actual.Payload2.Type);
+            Assert.AreEqual(1, (int)actual.Payload2["prop1"]);
+            Assert.AreEqual(2, (int)actual.Payload2["prop2"][0]);
+            Assert.AreEqual(null, actual.Payload2.Parent);
+
+            Assert.AreEqual(1, (int)actual.Payload3[0]);
+            Assert.AreEqual(null, actual.Payload3.Parent);
+        }
+
+        [Test]
+        public void ReadAhead_JArray_NoParent()
+        {
+            ItemWithUntypedPayload actual = JsonConvert.DeserializeObject<ItemWithUntypedPayload>(@"{
+  ""Payload"": [1]
+}",
+                new JsonSerializerSettings
+                {
+                    MetadataPropertyHandling = MetadataPropertyHandling.ReadAhead
+                });
+
+            JArray o = (JArray)actual.Payload;
+            Assert.AreEqual(null, o.Parent);
         }
 
         public class ItemWithUntypedPayload

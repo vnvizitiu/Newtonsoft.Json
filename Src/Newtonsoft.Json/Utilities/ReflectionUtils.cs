@@ -25,7 +25,7 @@
 
 using System;
 using System.Collections.Generic;
-#if !(PORTABLE || PORTABLE40 || NET35 || NET20)
+#if !(PORTABLE || PORTABLE40 || NET35 || NET20) || NETSTANDARD1_1
 using System.Numerics;
 #endif
 using System.Reflection;
@@ -151,33 +151,39 @@ namespace Newtonsoft.Json.Utilities
             return (v != null) ? v.GetType() : null;
         }
 
-        public static string GetTypeName(Type t, FormatterAssemblyStyle assemblyFormat, SerializationBinder binder)
+        public static string GetTypeName(Type t, TypeNameAssemblyFormatHandling assemblyFormat, ISerializationBinder binder)
         {
-            string fullyQualifiedTypeName;
-#if !(NET20 || NET35)
-            if (binder != null)
-            {
-                string assemblyName, typeName;
-                binder.BindToName(t, out assemblyName, out typeName);
-                fullyQualifiedTypeName = typeName + (assemblyName == null ? "" : ", " + assemblyName);
-            }
-            else
-            {
-                fullyQualifiedTypeName = t.AssemblyQualifiedName;
-            }
-#else
-            fullyQualifiedTypeName = t.AssemblyQualifiedName;
-#endif
+            string fullyQualifiedTypeName = GetFullyQualifiedTypeName(t, binder);
 
             switch (assemblyFormat)
             {
-                case FormatterAssemblyStyle.Simple:
+                case TypeNameAssemblyFormatHandling.Simple:
                     return RemoveAssemblyDetails(fullyQualifiedTypeName);
-                case FormatterAssemblyStyle.Full:
+                case TypeNameAssemblyFormatHandling.Full:
                     return fullyQualifiedTypeName;
                 default:
                     throw new ArgumentOutOfRangeException();
             }
+        }
+
+        private static string GetFullyQualifiedTypeName(Type t, ISerializationBinder binder)
+        {
+            if (binder != null)
+            {
+                string assemblyName;
+                string typeName;
+                binder.BindToName(t, out assemblyName, out typeName);
+#if (NET20 || NET35)
+                // for older SerializationBinder implementations that didn't have BindToName
+                if (assemblyName == null & typeName == null)
+                {
+                    return t.AssemblyQualifiedName;
+                }
+#endif
+                return typeName + (assemblyName == null ? "" : ", " + assemblyName);
+            }
+
+            return t.AssemblyQualifiedName;
         }
 
         private static string RemoveAssemblyDetails(string fullyQualifiedTypeName)
@@ -656,7 +662,7 @@ namespace Newtonsoft.Json.Utilities
             // update: I think this is fixed in .NET 3.5 SP1 - leave this in for now...
             List<MemberInfo> distinctMembers = new List<MemberInfo>(targetMembers.Count);
 
-            foreach (var groupedMember in targetMembers.GroupBy(m => m.Name))
+            foreach (IGrouping<string, MemberInfo> groupedMember in targetMembers.GroupBy(m => m.Name))
             {
                 int count = groupedMember.Count();
                 IList<MemberInfo> members = groupedMember.ToList();
@@ -769,9 +775,11 @@ namespace Newtonsoft.Json.Utilities
                 Attribute[] attributes = a.Cast<Attribute>().ToArray();
 
 #if (NET20 || NET35)
-    // ye olde .NET GetCustomAttributes doesn't respect the inherit argument
+                // ye olde .NET GetCustomAttributes doesn't respect the inherit argument
                 if (inherit && t.BaseType != null)
+                {
                     attributes = attributes.Union(GetAttributes(t.BaseType, attributeType, inherit)).ToArray();
+                }
 #endif
 
                 return attributes;
@@ -856,9 +864,12 @@ namespace Newtonsoft.Json.Utilities
         }
 #endif
 
-        public static void SplitFullyQualifiedTypeName(string fullyQualifiedTypeName, out string typeName, out string assemblyName)
+        public static TypeNameKey SplitFullyQualifiedTypeName(string fullyQualifiedTypeName)
         {
             int? assemblyDelimiterIndex = GetAssemblyDelimiterIndex(fullyQualifiedTypeName);
+
+            string typeName;
+            string assemblyName;
 
             if (assemblyDelimiterIndex != null)
             {
@@ -870,6 +881,8 @@ namespace Newtonsoft.Json.Utilities
                 typeName = fullyQualifiedTypeName;
                 assemblyName = null;
             }
+
+            return new TypeNameKey(assemblyName, typeName);
         }
 
         private static int? GetAssemblyDelimiterIndex(string fullyQualifiedTypeName)
@@ -1098,7 +1111,7 @@ namespace Newtonsoft.Json.Utilities
                     return 0m;
                 case PrimitiveTypeCode.DateTime:
                     return new DateTime();
-#if !(PORTABLE || PORTABLE40 || NET35 || NET20)
+#if !(PORTABLE || PORTABLE40 || NET35 || NET20) || NETSTANDARD1_1
                 case PrimitiveTypeCode.BigInteger:
                     return new BigInteger();
 #endif
@@ -1117,6 +1130,38 @@ namespace Newtonsoft.Json.Utilities
 
             // possibly use IL initobj for perf here?
             return Activator.CreateInstance(type);
+        }
+    }
+
+    internal struct TypeNameKey : IEquatable<TypeNameKey>
+    {
+        internal readonly string AssemblyName;
+        internal readonly string TypeName;
+
+        public TypeNameKey(string assemblyName, string typeName)
+        {
+            AssemblyName = assemblyName;
+            TypeName = typeName;
+        }
+
+        public override int GetHashCode()
+        {
+            return (AssemblyName?.GetHashCode() ?? 0) ^ (TypeName?.GetHashCode() ?? 0);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (!(obj is TypeNameKey))
+            {
+                return false;
+            }
+
+            return Equals((TypeNameKey)obj);
+        }
+
+        public bool Equals(TypeNameKey other)
+        {
+            return (AssemblyName == other.AssemblyName && TypeName == other.TypeName);
         }
     }
 }

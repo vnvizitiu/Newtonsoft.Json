@@ -27,7 +27,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Globalization;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE)
+#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
 using System.Numerics;
 #endif
 using Newtonsoft.Json.Serialization;
@@ -407,7 +407,7 @@ namespace Newtonsoft.Json
         /// <summary>
         /// Reads the next JSON token from the stream.
         /// </summary>
-        /// <returns>true if the next token was read successfully; false if there are no more tokens to read.</returns>
+        /// <returns><c>true</c> if the next token was read successfully; <c>false</c> if there are no more tokens to read.</returns>
         public abstract bool Read();
 
         /// <summary>
@@ -622,12 +622,24 @@ namespace Newtonsoft.Json
                 case JsonToken.Float:
                     if (!(Value is double))
                     {
-                        SetToken(JsonToken.Float, Convert.ToDouble(Value, CultureInfo.InvariantCulture), false);
+                        double d;
+#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
+                        if (Value is BigInteger)
+                        {
+                            d = (double)(BigInteger)Value;
+                        }
+                        else
+#endif
+                        {
+                            d = Convert.ToDouble(Value, CultureInfo.InvariantCulture);
+                        }
+
+                        SetToken(JsonToken.Float, d, false);
                     }
 
-                    return (double) Value;
+                    return (double)Value;
                 case JsonToken.String:
-                    return ReadDoubleString((string) Value);
+                    return ReadDoubleString((string)Value);
             }
 
             throw JsonReaderException.Create(this, "Error reading double. Unexpected token: {0}.".FormatWith(CultureInfo.InvariantCulture, t));
@@ -671,7 +683,7 @@ namespace Newtonsoft.Json
                 case JsonToken.Integer:
                 case JsonToken.Float:
                     bool b;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE)
+#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
                     if (Value is BigInteger)
                     {
                         b = (BigInteger)Value != 0;
@@ -892,7 +904,7 @@ namespace Newtonsoft.Json
         internal void ReadIntoWrappedTypeObject()
         {
             ReaderReadAndAssert();
-            if (Value.ToString() == JsonTypeReflector.TypePropertyName)
+            if (Value != null && Value.ToString() == JsonTypeReflector.TypePropertyName)
             {
                 ReaderReadAndAssert();
                 if (Value != null && Value.ToString().StartsWith("System.Byte[]", StringComparison.Ordinal))

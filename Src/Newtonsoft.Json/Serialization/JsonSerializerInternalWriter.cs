@@ -577,8 +577,8 @@ namespace Newtonsoft.Json.Serialization
             writer.WriteStartObject();
 
             bool isReference = ResolveIsReference(contract, member, collectionContract, containerProperty) ?? HasFlag(Serializer._preserveReferencesHandling, PreserveReferencesHandling.Objects);
-            // don't make readonly fields the referenced value because they can't be deserialized to
-            if (isReference && (member == null || member.Writable))
+            // don't make readonly fields that aren't creator parameters the referenced value because they can't be deserialized to
+            if (isReference && (member == null || member.Writable || HasCreatorParameter(collectionContract, member)))
             {
                 WriteReferenceIdProperty(writer, contract.UnderlyingType, value);
             }
@@ -586,6 +586,17 @@ namespace Newtonsoft.Json.Serialization
             {
                 WriteTypeProperty(writer, contract.UnderlyingType);
             }
+        }
+
+        private bool HasCreatorParameter(JsonContainerContract contract, JsonProperty property)
+        {
+            JsonObjectContract objectContract = contract as JsonObjectContract;
+            if (objectContract == null)
+            {
+                return false;
+            }
+
+            return objectContract.CreatorParameters.Contains(property.PropertyName);
         }
 
         private void WriteReferenceIdProperty(JsonWriter writer, Type type, object value)
@@ -603,7 +614,7 @@ namespace Newtonsoft.Json.Serialization
 
         private void WriteTypeProperty(JsonWriter writer, Type type)
         {
-            string typeName = ReflectionUtils.GetTypeName(type, Serializer._typeNameAssemblyFormat, Serializer._binder);
+            string typeName = ReflectionUtils.GetTypeName(type, Serializer._typeNameAssemblyFormatHandling, Serializer._serializationBinder);
 
             if (TraceWriter != null && TraceWriter.LevelFilter >= TraceLevel.Verbose)
             {
@@ -804,8 +815,8 @@ namespace Newtonsoft.Json.Serialization
         private bool WriteStartArray(JsonWriter writer, object values, JsonArrayContract contract, JsonProperty member, JsonContainerContract containerContract, JsonProperty containerProperty)
         {
             bool isReference = ResolveIsReference(contract, member, containerContract, containerProperty) ?? HasFlag(Serializer._preserveReferencesHandling, PreserveReferencesHandling.Arrays);
-            // don't make readonly fields the referenced value because they can't be deserialized to
-            isReference = (isReference && (member == null || member.Writable));
+            // don't make readonly fields that aren't creator parameters the referenced value because they can't be deserialized to
+            isReference = (isReference && (member == null || member.Writable || HasCreatorParameter(containerContract, member)));
 
             bool includeTypeDetails = ShouldWriteType(TypeNameHandling.Arrays, contract, member, containerContract, containerProperty);
             bool writeMetadataObject = isReference || includeTypeDetails;
@@ -1002,14 +1013,14 @@ namespace Newtonsoft.Json.Serialization
             {
                 if (member != null)
                 {
-                    if (contract.UnderlyingType != member.PropertyContract.CreatedType)
+                    if (contract.NonNullableUnderlyingType != member.PropertyContract.CreatedType)
                     {
                         return true;
                     }
                 }
                 else if (containerContract != null)
                 {
-                    if (containerContract.ItemContract == null || contract.UnderlyingType != containerContract.ItemContract.CreatedType)
+                    if (containerContract.ItemContract == null || contract.NonNullableUnderlyingType != containerContract.ItemContract.CreatedType)
                     {
                         return true;
                     }
@@ -1018,7 +1029,7 @@ namespace Newtonsoft.Json.Serialization
                 {
                     JsonContract rootContract = Serializer._contractResolver.ResolveContract(_rootType);
 
-                    if (contract.UnderlyingType != rootContract.CreatedType)
+                    if (contract.NonNullableUnderlyingType != rootContract.CreatedType)
                     {
                         return true;
                     }
@@ -1050,48 +1061,59 @@ namespace Newtonsoft.Json.Serialization
 
             int initialDepth = writer.Top;
 
-            foreach (DictionaryEntry entry in values)
+            // Manual use of IDictionaryEnumerator instead of foreach to avoid DictionaryEntry box allocations.
+            IDictionaryEnumerator e = values.GetEnumerator();
+            try
             {
-                bool escape;
-                string propertyName = GetPropertyName(writer, entry.Key, contract.KeyContract, out escape);
-
-                propertyName = (contract.DictionaryKeyResolver != null)
-                    ? contract.DictionaryKeyResolver(propertyName)
-                    : propertyName;
-
-                try
+                while (e.MoveNext())
                 {
-                    object value = entry.Value;
-                    JsonContract valueContract = contract.FinalItemContract ?? GetContractSafe(value);
+                    DictionaryEntry entry = e.Entry;
 
-                    if (ShouldWriteReference(value, null, valueContract, contract, member))
+                    bool escape;
+                    string propertyName = GetPropertyName(writer, entry.Key, contract.KeyContract, out escape);
+
+                    propertyName = (contract.DictionaryKeyResolver != null)
+                        ? contract.DictionaryKeyResolver(propertyName)
+                        : propertyName;
+
+                    try
                     {
-                        writer.WritePropertyName(propertyName, escape);
-                        WriteReference(writer, value);
-                    }
-                    else
-                    {
-                        if (!CheckForCircularReference(writer, value, null, valueContract, contract, member))
+                        object value = entry.Value;
+                        JsonContract valueContract = contract.FinalItemContract ?? GetContractSafe(value);
+
+                        if (ShouldWriteReference(value, null, valueContract, contract, member))
                         {
-                            continue;
+                            writer.WritePropertyName(propertyName, escape);
+                            WriteReference(writer, value);
                         }
+                        else
+                        {
+                            if (!CheckForCircularReference(writer, value, null, valueContract, contract, member))
+                            {
+                                continue;
+                            }
 
-                        writer.WritePropertyName(propertyName, escape);
+                            writer.WritePropertyName(propertyName, escape);
 
-                        SerializeValue(writer, value, valueContract, null, contract, member);
+                            SerializeValue(writer, value, valueContract, null, contract, member);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        if (IsErrorHandled(underlyingDictionary, contract, propertyName, null, writer.ContainerPath, ex))
+                        {
+                            HandleError(writer, initialDepth);
+                        }
+                        else
+                        {
+                            throw;
+                        }
                     }
                 }
-                catch (Exception ex)
-                {
-                    if (IsErrorHandled(underlyingDictionary, contract, propertyName, null, writer.ContainerPath, ex))
-                    {
-                        HandleError(writer, initialDepth);
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
+            }
+            finally
+            {
+                (e as IDisposable)?.Dispose();
             }
 
             writer.WriteEndObject();

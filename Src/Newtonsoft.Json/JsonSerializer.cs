@@ -45,7 +45,7 @@ namespace Newtonsoft.Json
     public class JsonSerializer
     {
         internal TypeNameHandling _typeNameHandling;
-        internal FormatterAssemblyStyle _typeNameAssemblyFormat;
+        internal TypeNameAssemblyFormatHandling _typeNameAssemblyFormatHandling;
         internal PreserveReferencesHandling _preserveReferencesHandling;
         internal ReferenceLoopHandling _referenceLoopHandling;
         internal MissingMemberHandling _missingMemberHandling;
@@ -58,7 +58,7 @@ namespace Newtonsoft.Json
         internal IContractResolver _contractResolver;
         internal ITraceWriter _traceWriter;
         internal IEqualityComparer _equalityComparer;
-        internal SerializationBinder _binder;
+        internal ISerializationBinder _serializationBinder;
         internal StreamingContext _context;
         private IReferenceResolver _referenceResolver;
 
@@ -101,9 +101,24 @@ namespace Newtonsoft.Json
         /// <summary>
         /// Gets or sets the <see cref="SerializationBinder"/> used by the serializer when resolving type names.
         /// </summary>
+        [Obsolete("Binder is obsolete. Use SerializationBinder instead.")]
         public virtual SerializationBinder Binder
         {
-            get { return _binder; }
+            get
+            {
+                if (_serializationBinder == null)
+                {
+                    return null;
+                }
+
+                SerializationBinderAdapter adapter = _serializationBinder as SerializationBinderAdapter;
+                if (adapter != null)
+                {
+                    return adapter.SerializationBinder;
+                }
+
+                throw new InvalidOperationException("Cannot get SerializationBinder because an ISerializationBinder was previously set.");
+            }
             set
             {
                 if (value == null)
@@ -111,7 +126,24 @@ namespace Newtonsoft.Json
                     throw new ArgumentNullException(nameof(value), "Serialization binder cannot be null.");
                 }
 
-                _binder = value;
+                _serializationBinder = new SerializationBinderAdapter(value);
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets the <see cref="ISerializationBinder"/> used by the serializer when resolving type names.
+        /// </summary>
+        public virtual ISerializationBinder SerializationBinder
+        {
+            get { return _serializationBinder; }
+            set
+            {
+                if (value == null)
+                {
+                    throw new ArgumentNullException(nameof(value), "Serialization binder cannot be null.");
+                }
+
+                _serializationBinder = value;
             }
         }
 
@@ -161,9 +193,10 @@ namespace Newtonsoft.Json
         /// Gets or sets how a type name assembly is written and resolved by the serializer.
         /// </summary>
         /// <value>The type name assembly format.</value>
+        [Obsolete("TypeNameAssemblyFormat is obsolete. Use TypeNameAssemblyFormatHandling instead.")]
         public virtual FormatterAssemblyStyle TypeNameAssemblyFormat
         {
-            get { return _typeNameAssemblyFormat; }
+            get { return (FormatterAssemblyStyle)_typeNameAssemblyFormatHandling; }
             set
             {
                 if (value < FormatterAssemblyStyle.Simple || value > FormatterAssemblyStyle.Full)
@@ -171,7 +204,25 @@ namespace Newtonsoft.Json
                     throw new ArgumentOutOfRangeException(nameof(value));
                 }
 
-                _typeNameAssemblyFormat = value;
+                _typeNameAssemblyFormatHandling = (TypeNameAssemblyFormatHandling)value;
+            }
+        }
+
+        /// <summary>
+        /// Gets or sets how a type name assembly is written and resolved by the serializer.
+        /// </summary>
+        /// <value>The type name assembly format.</value>
+        public virtual TypeNameAssemblyFormatHandling TypeNameAssemblyFormatHandling
+        {
+            get { return _typeNameAssemblyFormatHandling; }
+            set
+            {
+                if (value < TypeNameAssemblyFormatHandling.Simple || value > TypeNameAssemblyFormatHandling.Full)
+                {
+                    throw new ArgumentOutOfRangeException(nameof(value));
+                }
+
+                _typeNameAssemblyFormatHandling = value;
             }
         }
 
@@ -488,7 +539,7 @@ namespace Newtonsoft.Json
             _typeNameHandling = JsonSerializerSettings.DefaultTypeNameHandling;
             _metadataPropertyHandling = JsonSerializerSettings.DefaultMetadataPropertyHandling;
             _context = JsonSerializerSettings.DefaultContext;
-            _binder = DefaultSerializationBinder.Instance;
+            _serializationBinder = DefaultSerializationBinder.Instance;
 
             _culture = JsonSerializerSettings.DefaultCulture;
             _contractResolver = DefaultContractResolver.Instance;
@@ -594,9 +645,9 @@ namespace Newtonsoft.Json
             {
                 serializer.MetadataPropertyHandling = settings.MetadataPropertyHandling;
             }
-            if (settings._typeNameAssemblyFormat != null)
+            if (settings._typeNameAssemblyFormatHandling != null)
             {
-                serializer.TypeNameAssemblyFormat = settings.TypeNameAssemblyFormat;
+                serializer.TypeNameAssemblyFormatHandling = settings.TypeNameAssemblyFormatHandling;
             }
             if (settings._preserveReferencesHandling != null)
             {
@@ -656,9 +707,9 @@ namespace Newtonsoft.Json
             {
                 serializer.EqualityComparer = settings.EqualityComparer;
             }
-            if (settings.Binder != null)
+            if (settings.SerializationBinder != null)
             {
-                serializer.Binder = settings.Binder;
+                serializer.SerializationBinder = settings.SerializationBinder;
             }
 
             // reader/writer specific

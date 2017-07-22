@@ -54,7 +54,7 @@ namespace Newtonsoft.Json.Bson
 
         public void Close()
         {
-#if !(DOTNET || PORTABLE40 || PORTABLE)
+#if HAVE_STREAM_READER_WRITER_CLOSE
             _writer.Close();
 #else
             _writer.Dispose();
@@ -124,10 +124,7 @@ namespace Newtonsoft.Json.Bson
                 }
                     break;
                 case BsonType.Boolean:
-                {
-                    BsonValue value = (BsonValue)t;
-                    _writer.Write((bool)value.Value);
-                }
+                    _writer.Write(t == BsonBoolean.True);
                     break;
                 case BsonType.Null:
                 case BsonType.Undefined:
@@ -152,7 +149,7 @@ namespace Newtonsoft.Json.Bson
 
                         ticks = DateTimeUtils.ConvertDateTimeToJavaScriptTicks(dateTime, false);
                     }
-#if !NET20
+#if HAVE_DATE_TIME_OFFSET
                     else
                     {
                         DateTimeOffset dateTimeOffset = (DateTimeOffset)value.Value;
@@ -210,12 +207,13 @@ namespace Newtonsoft.Json.Bson
         {
             if (s != null)
             {
-                if (_largeByteBuffer == null)
-                {
-                    _largeByteBuffer = new byte[256];
-                }
                 if (byteCount <= 256)
                 {
+                    if (_largeByteBuffer == null)
+                    {
+                        _largeByteBuffer = new byte[256];
+                    }
+
                     Encoding.GetBytes(s, 0, s.Length, _largeByteBuffer, 0);
                     _writer.Write(_largeByteBuffer, 0, byteCount);
                 }

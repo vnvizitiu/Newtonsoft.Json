@@ -23,10 +23,10 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 #endregion
 
-#if !(DOTNET || PORTABLE || PORTABLE40)
+#if HAVE_REFLECTION_EMIT
 using System;
 using System.Collections.Generic;
-#if NET20
+#if !HAVE_LINQ
 using Newtonsoft.Json.Utilities.LinqBridge;
 #endif
 using System.Reflection;
@@ -38,7 +38,12 @@ namespace Newtonsoft.Json.Utilities
 {
     internal class DynamicReflectionDelegateFactory : ReflectionDelegateFactory
     {
-        public static DynamicReflectionDelegateFactory Instance = new DynamicReflectionDelegateFactory();
+        private static readonly DynamicReflectionDelegateFactory _instance = new DynamicReflectionDelegateFactory();
+
+        internal static DynamicReflectionDelegateFactory Instance
+        {
+            get { return _instance; }
+        }
 
         private static DynamicMethod CreateDynamicMethod(string name, Type returnType, Type[] parameterTypes, Type owner)
         {

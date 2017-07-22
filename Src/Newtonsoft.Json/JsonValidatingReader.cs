@@ -1,4 +1,4 @@
-﻿#region License
+#region License
 // Copyright (c) 2007 James Newton-King
 //
 // Permission is hereby granted, free of charge, to any person
@@ -25,7 +25,7 @@
 
 using System;
 using System.Collections.Generic;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
+#if HAVE_BIG_INTEGER
 using System.Numerics;
 #endif
 using Newtonsoft.Json.Linq;
@@ -34,7 +34,7 @@ using Newtonsoft.Json.Utilities;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.IO;
-#if NET20
+#if !HAVE_LINQ
 using Newtonsoft.Json.Utilities.LinqBridge;
 #else
 using System.Linq;
@@ -62,8 +62,8 @@ namespace Newtonsoft.Json
 
             public string CurrentPropertyName { get; set; }
             public int ArrayItemCount { get; set; }
-            public bool IsUniqueArray { get; set; }
-            public IList<JToken> UniqueArrayItems { get; set; }
+            public bool IsUniqueArray { get; }
+            public IList<JToken> UniqueArrayItems { get; }
             public JTokenWriter CurrentItemWriter { get; set; }
 
             public IList<JsonSchemaModel> Schemas
@@ -97,7 +97,7 @@ namespace Newtonsoft.Json
 
             private IEnumerable<string> GetRequiredProperties(JsonSchemaModel schema)
             {
-                if (schema == null || schema.Properties == null)
+                if (schema?.Properties == null)
                 {
                     return Enumerable.Empty<string>();
                 }
@@ -163,7 +163,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Gets the Common Language Runtime (CLR) type for the current JSON token.
+        /// Gets the .NET type for the current JSON token.
         /// </summary>
         /// <value></value>
         public override Type ValueType
@@ -351,6 +351,19 @@ namespace Newtonsoft.Json
             get { return _reader; }
         }
 
+        /// <summary>
+        /// Changes the reader's state to <see cref="JsonReader.State.Closed"/>.
+        /// If <see cref="JsonReader.CloseInput"/> is set to <c>true</c>, the underlying <see cref="JsonReader"/> is also closed.
+        /// </summary>
+        public override void Close()
+        {
+            base.Close();
+            if (CloseInput)
+            {
+                _reader?.Close();
+            }
+        }
+
         private void ValidateNotDisallowed(JsonSchemaModel schema)
         {
             if (schema == null)
@@ -392,9 +405,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="Nullable{Int32}"/>.
+        /// Reads the next JSON token from the underlying <see cref="JsonReader"/> as a <see cref="Nullable{T}"/> of <see cref="Int32"/>.
         /// </summary>
-        /// <returns>A <see cref="Nullable{Int32}"/>.</returns>
+        /// <returns>A <see cref="Nullable{T}"/> of <see cref="Int32"/>.</returns>
         public override int? ReadAsInt32()
         {
             int? i = _reader.ReadAsInt32();
@@ -404,10 +417,10 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="Byte"/>[].
+        /// Reads the next JSON token from the underlying <see cref="JsonReader"/> as a <see cref="Byte"/>[].
         /// </summary>
         /// <returns>
-        /// A <see cref="Byte"/>[] or a null reference if the next JSON token is null.
+        /// A <see cref="Byte"/>[] or <c>null</c> if the next JSON token is null.
         /// </returns>
         public override byte[] ReadAsBytes()
         {
@@ -418,9 +431,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="Nullable{Decimal}"/>.
+        /// Reads the next JSON token from the underlying <see cref="JsonReader"/> as a <see cref="Nullable{T}"/> of <see cref="Decimal"/>.
         /// </summary>
-        /// <returns>A <see cref="Nullable{Decimal}"/>.</returns>
+        /// <returns>A <see cref="Nullable{T}"/> of <see cref="Decimal"/>.</returns>
         public override decimal? ReadAsDecimal()
         {
             decimal? d = _reader.ReadAsDecimal();
@@ -430,9 +443,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="Nullable{Double}"/>.
+        /// Reads the next JSON token from the underlying <see cref="JsonReader"/> as a <see cref="Nullable{T}"/> of <see cref="Double"/>.
         /// </summary>
-        /// <returns>A <see cref="Nullable{Double}"/>.</returns>
+        /// <returns>A <see cref="Nullable{T}"/> of <see cref="Double"/>.</returns>
         public override double? ReadAsDouble()
         {
             double? d = _reader.ReadAsDouble();
@@ -442,9 +455,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="Nullable{Boolean}"/>.
+        /// Reads the next JSON token from the underlying <see cref="JsonReader"/> as a <see cref="Nullable{T}"/> of <see cref="Boolean"/>.
         /// </summary>
-        /// <returns>A <see cref="Nullable{Boolean}"/>.</returns>
+        /// <returns>A <see cref="Nullable{T}"/> of <see cref="Boolean"/>.</returns>
         public override bool? ReadAsBoolean()
         {
             bool? b = _reader.ReadAsBoolean();
@@ -454,7 +467,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="String"/>.
+        /// Reads the next JSON token from the underlying <see cref="JsonReader"/> as a <see cref="String"/>.
         /// </summary>
         /// <returns>A <see cref="String"/>. This method will return <c>null</c> at the end of an array.</returns>
         public override string ReadAsString()
@@ -466,9 +479,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="Nullable{DateTime}"/>.
+        /// Reads the next JSON token from the underlying <see cref="JsonReader"/> as a <see cref="Nullable{T}"/> of <see cref="DateTime"/>.
         /// </summary>
-        /// <returns>A <see cref="Nullable{DateTime}"/>. This method will return <c>null</c> at the end of an array.</returns>
+        /// <returns>A <see cref="Nullable{T}"/> of <see cref="DateTime"/>. This method will return <c>null</c> at the end of an array.</returns>
         public override DateTime? ReadAsDateTime()
         {
             DateTime? dateTime = _reader.ReadAsDateTime();
@@ -477,11 +490,11 @@ namespace Newtonsoft.Json
             return dateTime;
         }
 
-#if !NET20
+#if HAVE_DATE_TIME_OFFSET
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="Nullable{DateTimeOffset}"/>.
+        /// Reads the next JSON token from the underlying <see cref="JsonReader"/> as a <see cref="Nullable{T}"/> of <see cref="DateTimeOffset"/>.
         /// </summary>
-        /// <returns>A <see cref="Nullable{DateTimeOffset}"/>.</returns>
+        /// <returns>A <see cref="Nullable{T}"/> of <see cref="DateTimeOffset"/>.</returns>
         public override DateTimeOffset? ReadAsDateTimeOffset()
         {
             DateTimeOffset? dateTimeOffset = _reader.ReadAsDateTimeOffset();
@@ -492,7 +505,7 @@ namespace Newtonsoft.Json
 #endif
 
         /// <summary>
-        /// Reads the next JSON token from the stream.
+        /// Reads the next JSON token from the underlying <see cref="JsonReader"/>.
         /// </summary>
         /// <returns>
         /// <c>true</c> if the next token was read successfully; <c>false</c> if there are no more tokens to read.
@@ -697,15 +710,14 @@ namespace Newtonsoft.Json
 
             Dictionary<string, bool> requiredProperties = _currentScope.RequiredProperties;
 
-            if (requiredProperties != null)
+            if (requiredProperties != null && requiredProperties.Values.Any(v => !v))
             {
-                List<string> unmatchedRequiredProperties =
-                    requiredProperties.Where(kv => !kv.Value).Select(kv => kv.Key).ToList();
-
-                if (unmatchedRequiredProperties.Count > 0)
-                {
-                    RaiseError("Required properties are missing from object: {0}.".FormatWith(CultureInfo.InvariantCulture, string.Join(", ", unmatchedRequiredProperties.ToArray())), schema);
-                }
+                IEnumerable<string> unmatchedRequiredProperties = requiredProperties.Where(kv => !kv.Value).Select(kv => kv.Key);
+                RaiseError("Required properties are missing from object: {0}.".FormatWith(CultureInfo.InvariantCulture, string.Join(", ", unmatchedRequiredProperties
+#if !HAVE_STRING_JOIN_WITH_ENUMERABLE
+                    .ToArray()
+#endif
+                    )), schema);
             }
         }
 
@@ -840,7 +852,7 @@ namespace Newtonsoft.Json
             if (schema.DivisibleBy != null)
             {
                 bool notDivisible;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
+#if HAVE_BIG_INTEGER
                 if (value is BigInteger)
                 {
                     // not that this will lose any decimal point on DivisibleBy
@@ -877,7 +889,7 @@ namespace Newtonsoft.Json
 
                 foreach (JsonSchemaModel currentSchema in CurrentSchemas)
                 {
-                    // if there is positional validation and the array index is past the number of item validation schemas and there is no additonal items then error
+                    // if there is positional validation and the array index is past the number of item validation schemas and there are no additional items then error
                     if (currentSchema != null
                         && currentSchema.PositionalItemsValidation
                         && !currentSchema.AllowAdditionalItems

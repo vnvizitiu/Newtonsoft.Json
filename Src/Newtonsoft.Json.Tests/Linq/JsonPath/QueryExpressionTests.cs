@@ -53,7 +53,7 @@ namespace Newtonsoft.Json.Tests.Linq.JsonPath
                     new BooleanQueryExpression
                     {
                         Operator = QueryOperator.Exists,
-                        Path = new List<PathFilter>
+                        Left = new List<PathFilter>
                         {
                             new FieldFilter
                             {
@@ -64,7 +64,7 @@ namespace Newtonsoft.Json.Tests.Linq.JsonPath
                     new BooleanQueryExpression
                     {
                         Operator = QueryOperator.Exists,
-                        Path = new List<PathFilter>
+                        Left = new List<PathFilter>
                         {
                             new FieldFilter
                             {
@@ -111,7 +111,7 @@ namespace Newtonsoft.Json.Tests.Linq.JsonPath
                     new BooleanQueryExpression
                     {
                         Operator = QueryOperator.Exists,
-                        Path = new List<PathFilter>
+                        Left = new List<PathFilter>
                         {
                             new FieldFilter
                             {
@@ -122,7 +122,7 @@ namespace Newtonsoft.Json.Tests.Linq.JsonPath
                     new BooleanQueryExpression
                     {
                         Operator = QueryOperator.Exists,
-                        Path = new List<PathFilter>
+                        Left = new List<PathFilter>
                         {
                             new FieldFilter
                             {
@@ -164,8 +164,8 @@ namespace Newtonsoft.Json.Tests.Linq.JsonPath
             BooleanQueryExpression e1 = new BooleanQueryExpression
             {
                 Operator = QueryOperator.LessThan,
-                Value = new JValue(3),
-                Path = new List<PathFilter>
+                Right = new JValue(3),
+                Left = new List<PathFilter>
                 {
                     new ArrayIndexFilter()
                 }
@@ -175,12 +175,13 @@ namespace Newtonsoft.Json.Tests.Linq.JsonPath
             Assert.IsTrue(e1.IsMatch(null, new JArray(2, 3, 4, 5)));
             Assert.IsFalse(e1.IsMatch(null, new JArray(3, 4, 5)));
             Assert.IsFalse(e1.IsMatch(null, new JArray(4, 5)));
+            Assert.IsFalse(e1.IsMatch(null, new JArray("11", 5)));
 
             BooleanQueryExpression e2 = new BooleanQueryExpression
             {
                 Operator = QueryOperator.LessThanOrEquals,
-                Value = new JValue(3),
-                Path = new List<PathFilter>
+                Right = new JValue(3),
+                Left = new List<PathFilter>
                 {
                     new ArrayIndexFilter()
                 }
@@ -190,6 +191,47 @@ namespace Newtonsoft.Json.Tests.Linq.JsonPath
             Assert.IsTrue(e2.IsMatch(null, new JArray(2, 3, 4, 5)));
             Assert.IsTrue(e2.IsMatch(null, new JArray(3, 4, 5)));
             Assert.IsFalse(e2.IsMatch(null, new JArray(4, 5)));
+            Assert.IsFalse(e1.IsMatch(null, new JArray("11", 5)));
+        }
+
+        [Test]
+        public void BooleanExpressionTest_GreaterThanOperator()
+        {
+            BooleanQueryExpression e1 = new BooleanQueryExpression
+            {
+                Operator = QueryOperator.GreaterThan,
+                Right = new JValue(3),
+                Left = new List<PathFilter>
+                {
+                    new ArrayIndexFilter()
+                }
+            };
+
+            Assert.IsTrue(e1.IsMatch(null, new JArray("2", "26")));
+            Assert.IsTrue(e1.IsMatch(null, new JArray(2, 26)));
+            Assert.IsFalse(e1.IsMatch(null, new JArray(2, 3)));
+            Assert.IsFalse(e1.IsMatch(null, new JArray("2", "3")));
+        }
+
+        [Test]
+        public void BooleanExpressionTest_GreaterThanOrEqualsOperator()
+        {
+            BooleanQueryExpression e1 = new BooleanQueryExpression
+            {
+                Operator = QueryOperator.GreaterThanOrEquals,
+                Right = new JValue(3),
+                Left = new List<PathFilter>
+                {
+                    new ArrayIndexFilter()
+                }
+            };
+
+            Assert.IsTrue(e1.IsMatch(null, new JArray("2", "26")));
+            Assert.IsTrue(e1.IsMatch(null, new JArray(2, 26)));
+            Assert.IsTrue(e1.IsMatch(null, new JArray(2, 3)));
+            Assert.IsTrue(e1.IsMatch(null, new JArray("2", "3")));
+            Assert.IsFalse(e1.IsMatch(null, new JArray(2, 1)));
+            Assert.IsFalse(e1.IsMatch(null, new JArray("2", "1")));
         }
     }
 }

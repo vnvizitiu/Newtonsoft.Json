@@ -23,7 +23,7 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 #endregion
 
-#if !(NET20 || DOTNET || PORTABLE40 || PORTABLE)
+#if HAVE_ENTITY_FRAMEWORK
 using System;
 using Newtonsoft.Json.Serialization;
 using System.Globalization;
@@ -32,7 +32,7 @@ using Newtonsoft.Json.Utilities;
 namespace Newtonsoft.Json.Converters
 {
     /// <summary>
-    /// Converts an Entity Framework EntityKey to and from JSON.
+    /// Converts an Entity Framework <see cref="T:System.Data.EntityKeyMember"/> to and from JSON.
     /// </summary>
     public class EntityKeyMemberConverter : JsonConverter
     {
@@ -59,13 +59,13 @@ namespace Newtonsoft.Json.Converters
             string keyName = (string)_reflectionObject.GetValue(value, KeyPropertyName);
             object keyValue = _reflectionObject.GetValue(value, ValuePropertyName);
 
-            Type keyValueType = (keyValue != null) ? keyValue.GetType() : null;
+            Type keyValueType = keyValue?.GetType();
 
             writer.WriteStartObject();
             writer.WritePropertyName((resolver != null) ? resolver.GetResolvedPropertyName(KeyPropertyName) : KeyPropertyName);
             writer.WriteValue(keyName);
             writer.WritePropertyName((resolver != null) ? resolver.GetResolvedPropertyName(TypePropertyName) : TypePropertyName);
-            writer.WriteValue((keyValueType != null) ? keyValueType.FullName : null);
+            writer.WriteValue(keyValueType?.FullName);
 
             writer.WritePropertyName((resolver != null) ? resolver.GetResolvedPropertyName(ValuePropertyName) : ValuePropertyName);
 
@@ -149,7 +149,7 @@ namespace Newtonsoft.Json.Converters
         /// </returns>
         public override bool CanConvert(Type objectType)
         {
-            return objectType.AssignableToTypeName(EntityKeyMemberFullTypeName);
+            return objectType.AssignableToTypeName(EntityKeyMemberFullTypeName, false);
         }
     }
 }

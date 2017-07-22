@@ -101,7 +101,7 @@ namespace Newtonsoft.Json.Serialization
         /// Gets the underlying type for the contract.
         /// </summary>
         /// <value>The underlying type for the contract.</value>
-        public Type UnderlyingType { get; private set; }
+        public Type UnderlyingType { get; }
 
         /// <summary>
         /// Gets or sets the type created during deserialization.
@@ -221,88 +221,13 @@ namespace Newtonsoft.Json.Serialization
         }
 
         /// <summary>
-        /// Gets or sets the method called immediately after deserialization of the object.
-        /// </summary>
-        /// <value>The method called immediately after deserialization of the object.</value>
-        [Obsolete("This property is obsolete and has been replaced by the OnDeserializedCallbacks collection.")]
-        public MethodInfo OnDeserialized
-        {
-            get { return (OnDeserializedCallbacks.Count > 0) ? OnDeserializedCallbacks[0].Method() : null; }
-            set
-            {
-                OnDeserializedCallbacks.Clear();
-                OnDeserializedCallbacks.Add(CreateSerializationCallback(value));
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the method called during deserialization of the object.
-        /// </summary>
-        /// <value>The method called during deserialization of the object.</value>
-        [Obsolete("This property is obsolete and has been replaced by the OnDeserializingCallbacks collection.")]
-        public MethodInfo OnDeserializing
-        {
-            get { return (OnDeserializingCallbacks.Count > 0) ? OnDeserializingCallbacks[0].Method() : null; }
-            set
-            {
-                OnDeserializingCallbacks.Clear();
-                OnDeserializingCallbacks.Add(CreateSerializationCallback(value));
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the method called after serialization of the object graph.
-        /// </summary>
-        /// <value>The method called after serialization of the object graph.</value>
-        [Obsolete("This property is obsolete and has been replaced by the OnSerializedCallbacks collection.")]
-        public MethodInfo OnSerialized
-        {
-            get { return (OnSerializedCallbacks.Count > 0) ? OnSerializedCallbacks[0].Method() : null; }
-            set
-            {
-                OnSerializedCallbacks.Clear();
-                OnSerializedCallbacks.Add(CreateSerializationCallback(value));
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the method called before serialization of the object.
-        /// </summary>
-        /// <value>The method called before serialization of the object.</value>
-        [Obsolete("This property is obsolete and has been replaced by the OnSerializingCallbacks collection.")]
-        public MethodInfo OnSerializing
-        {
-            get { return (OnSerializingCallbacks.Count > 0) ? OnSerializingCallbacks[0].Method() : null; }
-            set
-            {
-                OnSerializingCallbacks.Clear();
-                OnSerializingCallbacks.Add(CreateSerializationCallback(value));
-            }
-        }
-
-        /// <summary>
-        /// Gets or sets the method called when an error is thrown during the serialization of the object.
-        /// </summary>
-        /// <value>The method called when an error is thrown during the serialization of the object.</value>
-        [Obsolete("This property is obsolete and has been replaced by the OnErrorCallbacks collection.")]
-        public MethodInfo OnError
-        {
-            get { return (OnErrorCallbacks.Count > 0) ? OnErrorCallbacks[0].Method() : null; }
-            set
-            {
-                OnErrorCallbacks.Clear();
-                OnErrorCallbacks.Add(CreateSerializationErrorCallback(value));
-            }
-        }
-
-        /// <summary>
         /// Gets or sets the default creator method used to create the object.
         /// </summary>
         /// <value>The default creator method used to create the object.</value>
         public Func<object> DefaultCreator { get; set; }
 
         /// <summary>
-        /// Gets or sets a value indicating whether the default creator is non public.
+        /// Gets or sets a value indicating whether the default creator is non-public.
         /// </summary>
         /// <value><c>true</c> if the default object creator is non-public; otherwise, <c>false</c>.</value>
         public bool DefaultCreatorNonPublic { get; set; }

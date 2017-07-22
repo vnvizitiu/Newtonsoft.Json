@@ -23,7 +23,7 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 #endregion
 
-#if !(NET35 || NET20 || PORTABLE40)
+#if HAVE_DYNAMIC
 using System;
 using System.Collections.Generic;
 using System.Dynamic;
@@ -43,7 +43,7 @@ namespace Newtonsoft.Json.Serialization
         /// Gets the object's properties.
         /// </summary>
         /// <value>The object's properties.</value>
-        public JsonPropertyCollection Properties { get; private set; }
+        public JsonPropertyCollection Properties { get; }
 
         /// <summary>
         /// Gets or sets the property name resolver.

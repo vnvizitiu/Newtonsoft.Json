@@ -27,7 +27,7 @@ using System;
 using System.Collections.Generic;
 using Newtonsoft.Json.Utilities;
 using System.Globalization;
-#if NET20
+#if !HAVE_LINQ
 using Newtonsoft.Json.Utilities.LinqBridge;
 #else
 using System.Linq;
@@ -184,13 +184,14 @@ namespace Newtonsoft.Json.Linq
         {
             ValidationUtils.ArgumentNotNull(source, nameof(source));
 
-            foreach (JToken token in source)
+            if (key == null)
             {
-                if (key == null)
+                foreach (T token in source)
                 {
-                    if (token is JValue)
+                    JValue value = token as JValue;
+                    if (value != null)
                     {
-                        yield return Convert<JValue, U>((JValue)token);
+                        yield return Convert<JValue, U>(value);
                     }
                     else
                     {
@@ -200,7 +201,10 @@ namespace Newtonsoft.Json.Linq
                         }
                     }
                 }
-                else
+            }
+            else
+            {
+                foreach (T token in source)
                 {
                     JToken value = token[key];
                     if (value != null)
@@ -209,8 +213,6 @@ namespace Newtonsoft.Json.Linq
                     }
                 }
             }
-
-            yield break;
         }
 
         //TODO

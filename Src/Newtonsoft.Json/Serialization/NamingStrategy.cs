@@ -12,6 +12,12 @@
         public bool ProcessDictionaryKeys { get; set; }
 
         /// <summary>
+        /// A flag indicating whether extension data names should be processed.
+        /// Defaults to <c>false</c>.
+        /// </summary>
+        public bool ProcessExtensionDataNames { get; set; }
+
+        /// <summary>
         /// A flag indicating whether explicitly specified property names,
         /// e.g. a property name customized with a <see cref="JsonPropertyAttribute"/>, should be processed.
         /// Defaults to <c>false</c>.
@@ -22,11 +28,26 @@
         /// Gets the serialized name for a given property name.
         /// </summary>
         /// <param name="name">The initial property name.</param>
-        /// <param name="hasSpecifiedName">A flag indicating whether the property has had a name explicitly specfied.</param>
+        /// <param name="hasSpecifiedName">A flag indicating whether the property has had a name explicitly specified.</param>
         /// <returns>The serialized property name.</returns>
         public virtual string GetPropertyName(string name, bool hasSpecifiedName)
         {
             if (hasSpecifiedName && !OverrideSpecifiedNames)
+            {
+                return name;
+            }
+
+            return ResolvePropertyName(name);
+        }
+
+        /// <summary>
+        /// Gets the serialized name for a given extension data name.
+        /// </summary>
+        /// <param name="name">The initial extension data name.</param>
+        /// <returns>The serialized extension data name.</returns>
+        public virtual string GetExtensionDataName(string name)
+        {
+            if (!ProcessExtensionDataNames)
             {
                 return name;
             }

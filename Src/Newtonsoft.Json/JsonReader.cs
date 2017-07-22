@@ -27,12 +27,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Globalization;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
+#if HAVE_BIG_INTEGER
 using System.Numerics;
 #endif
 using Newtonsoft.Json.Serialization;
 using Newtonsoft.Json.Utilities;
-#if NET20
+#if !HAVE_LINQ
 using Newtonsoft.Json.Utilities.LinqBridge;
 #else
 using System.Linq;
@@ -43,7 +43,7 @@ namespace Newtonsoft.Json
     /// <summary>
     /// Represents a reader that provides fast, non-cached, forward-only access to serialized JSON data.
     /// </summary>
-    public abstract class JsonReader : IDisposable
+    public abstract partial class JsonReader : IDisposable
     {
         /// <summary>
         /// Specifies the state of the reader.
@@ -51,7 +51,7 @@ namespace Newtonsoft.Json
         protected internal enum State
         {
             /// <summary>
-            /// The Read method has not been called.
+            /// A <see cref="JsonReader"/> read method has not been called.
             /// </summary>
             Start,
 
@@ -86,7 +86,7 @@ namespace Newtonsoft.Json
             Array,
 
             /// <summary>
-            /// The Close method has been called.
+            /// The <see cref="JsonReader.Close()"/> method has been called.
             /// </summary>
             Closed,
 
@@ -101,7 +101,7 @@ namespace Newtonsoft.Json
             ConstructorStart,
 
             /// <summary>
-            /// Reader in a constructor.
+            /// Reader is in a constructor.
             /// </summary>
             Constructor,
 
@@ -141,12 +141,10 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Gets or sets a value indicating whether the underlying stream or
-        /// <see cref="TextReader"/> should be closed when the reader is closed.
+        /// Gets or sets a value indicating whether the source should be closed when this reader is closed.
         /// </summary>
         /// <value>
-        /// true to close the underlying stream or <see cref="TextReader"/> when
-        /// the reader is closed; otherwise false. The default is true.
+        /// <c>true</c> to close the source when this reader is closed; otherwise <c>false</c>. The default is <c>true</c>.
         /// </value>
         public bool CloseInput { get; set; }
 
@@ -155,7 +153,8 @@ namespace Newtonsoft.Json
         /// be read from a continuous stream without erroring.
         /// </summary>
         /// <value>
-        /// true to support reading multiple pieces of JSON content; otherwise false. The default is false.
+        /// <c>true</c> to support reading multiple pieces of JSON content; otherwise <c>false</c>.
+        /// The default is <c>false</c>.
         /// </value>
         public bool SupportMultipleContent { get; set; }
 
@@ -169,7 +168,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Get or set how <see cref="DateTime"/> time zones are handling when reading JSON.
+        /// Gets or sets how <see cref="DateTime"/> time zones are handled when reading JSON.
         /// </summary>
         public DateTimeZoneHandling DateTimeZoneHandling
         {
@@ -186,7 +185,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Get or set how date formatted strings, e.g. "\/Date(1198908717056)\/" and "2012-03-21T05:40Z", are parsed when reading JSON.
+        /// Gets or sets how date formatted strings, e.g. "\/Date(1198908717056)\/" and "2012-03-21T05:40Z", are parsed when reading JSON.
         /// </summary>
         public DateParseHandling DateParseHandling
         {
@@ -194,7 +193,7 @@ namespace Newtonsoft.Json
             set
             {
                 if (value < DateParseHandling.None ||
-#if !NET20
+#if HAVE_DATE_TIME_OFFSET
                     value > DateParseHandling.DateTimeOffset
 #else
                     value > DateParseHandling.DateTime
@@ -209,7 +208,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Get or set how floating point numbers, e.g. 1.0 and 9.9, are parsed when reading JSON text.
+        /// Gets or sets how floating point numbers, e.g. 1.0 and 9.9, are parsed when reading JSON text.
         /// </summary>
         public FloatParseHandling FloatParseHandling
         {
@@ -226,7 +225,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Get or set how custom date formatted strings are parsed when reading JSON.
+        /// Gets or sets how custom date formatted strings are parsed when reading JSON.
         /// </summary>
         public string DateFormatString
         {
@@ -268,11 +267,11 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Gets The Common Language Runtime (CLR) type for the current JSON token.
+        /// Gets the .NET type for the current JSON token.
         /// </summary>
         public virtual Type ValueType
         {
-            get { return (_value != null) ? _value.GetType() : null; }
+            get { return _value?.GetType(); }
         }
 
         /// <summary>
@@ -337,7 +336,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Initializes a new instance of the <see cref="JsonReader"/> class with the specified <see cref="TextReader"/>.
+        /// Initializes a new instance of the <see cref="JsonReader"/> class.
         /// </summary>
         protected JsonReader()
         {
@@ -405,15 +404,15 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Reads the next JSON token from the stream.
+        /// Reads the next JSON token from the source.
         /// </summary>
         /// <returns><c>true</c> if the next token was read successfully; <c>false</c> if there are no more tokens to read.</returns>
         public abstract bool Read();
 
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="Nullable{Int32}"/>.
+        /// Reads the next JSON token from the source as a <see cref="Nullable{T}"/> of <see cref="Int32"/>.
         /// </summary>
-        /// <returns>A <see cref="Nullable{Int32}"/>. This method will return <c>null</c> at the end of an array.</returns>
+        /// <returns>A <see cref="Nullable{T}"/> of <see cref="Int32"/>. This method will return <c>null</c> at the end of an array.</returns>
         public virtual int? ReadAsInt32()
         {
             JsonToken t = GetContentToken();
@@ -462,7 +461,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="String"/>.
+        /// Reads the next JSON token from the source as a <see cref="String"/>.
         /// </summary>
         /// <returns>A <see cref="String"/>. This method will return <c>null</c> at the end of an array.</returns>
         public virtual string ReadAsString()
@@ -484,17 +483,15 @@ namespace Newtonsoft.Json
                 if (Value != null)
                 {
                     string s;
-                    if (Value is IFormattable)
+                    IFormattable formattable = Value as IFormattable;
+                    if (formattable != null)
                     {
-                        s = ((IFormattable)Value).ToString(null, Culture);
-                    }
-                    else if (Value is Uri)
-                    {
-                        s = ((Uri)Value).OriginalString;
+                        s = formattable.ToString(null, Culture);
                     }
                     else
                     {
-                        s = Value.ToString();
+                        Uri uri = Value as Uri;
+                        s = uri != null ? uri.OriginalString : Value.ToString();
                     }
 
                     SetToken(JsonToken.String, s, false);
@@ -506,36 +503,30 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="Byte"/>[].
+        /// Reads the next JSON token from the source as a <see cref="Byte"/>[].
         /// </summary>
-        /// <returns>A <see cref="Byte"/>[] or a null reference if the next JSON token is null. This method will return <c>null</c> at the end of an array.</returns>
+        /// <returns>A <see cref="Byte"/>[] or <c>null</c> if the next JSON token is null. This method will return <c>null</c> at the end of an array.</returns>
         public virtual byte[] ReadAsBytes()
         {
             JsonToken t = GetContentToken();
 
-            if (t == JsonToken.None)
-            {
-                return null;
-            }
-
-            if (TokenType == JsonToken.StartObject)
-            {
-                ReadIntoWrappedTypeObject();
-
-                byte[] data = ReadAsBytes();
-                ReaderReadAndAssert();
-
-                if (TokenType != JsonToken.EndObject)
-                {
-                    throw JsonReaderException.Create(this, "Error reading bytes. Unexpected token: {0}.".FormatWith(CultureInfo.InvariantCulture, TokenType));
-                }
-
-                SetToken(JsonToken.Bytes, data, false);
-                return data;
-            }
-
             switch (t)
             {
+                case JsonToken.StartObject:
+                {
+                    ReadIntoWrappedTypeObject();
+
+                    byte[] data = ReadAsBytes();
+                    ReaderReadAndAssert();
+
+                    if (TokenType != JsonToken.EndObject)
+                    {
+                        throw JsonReaderException.Create(this, "Error reading bytes. Unexpected token: {0}.".FormatWith(CultureInfo.InvariantCulture, TokenType));
+                    }
+
+                    SetToken(JsonToken.Bytes, data, false);
+                    return data;
+                }
                 case JsonToken.String:
                 {
                     // attempt to convert possible base 64 or GUID string to bytes
@@ -547,7 +538,7 @@ namespace Newtonsoft.Json
                     Guid g;
                     if (s.Length == 0)
                     {
-                        data = new byte[0];
+                        data = CollectionUtils.ArrayEmpty<byte>();
                     }
                     else if (ConvertUtils.TryConvertGuid(s, out g))
                     {
@@ -561,6 +552,7 @@ namespace Newtonsoft.Json
                     SetToken(JsonToken.Bytes, data, false);
                     return data;
                 }
+                case JsonToken.None:
                 case JsonToken.Null:
                 case JsonToken.EndArray:
                     return null;
@@ -586,28 +578,42 @@ namespace Newtonsoft.Json
 
             while (true)
             {
-                JsonToken t = GetContentToken();
-                switch (t)
+                if (!Read())
                 {
-                    case JsonToken.None:
-                        throw JsonReaderException.Create(this, "Unexpected end when reading bytes.");
-                    case JsonToken.Integer:
-                        buffer.Add(Convert.ToByte(Value, CultureInfo.InvariantCulture));
-                        break;
-                    case JsonToken.EndArray:
-                        byte[] d = buffer.ToArray();
-                        SetToken(JsonToken.Bytes, d, false);
-                        return d;
-                    default:
-                        throw JsonReaderException.Create(this, "Unexpected token when reading bytes: {0}.".FormatWith(CultureInfo.InvariantCulture, t));
+                    SetToken(JsonToken.None);
+                }
+
+                if (ReadArrayElementIntoByteArrayReportDone(buffer))
+                {
+                    byte[] d = buffer.ToArray();
+                    SetToken(JsonToken.Bytes, d, false);
+                    return d;
                 }
             }
         }
 
+        private bool ReadArrayElementIntoByteArrayReportDone(List<byte> buffer)
+        {
+            switch (TokenType)
+            {
+                case JsonToken.None:
+                    throw JsonReaderException.Create(this, "Unexpected end when reading bytes.");
+                case JsonToken.Integer:
+                    buffer.Add(Convert.ToByte(Value, CultureInfo.InvariantCulture));
+                    return false;
+                case JsonToken.EndArray:
+                    return true;
+                case JsonToken.Comment:
+                    return false;
+                default:
+                    throw JsonReaderException.Create(this, "Unexpected token when reading bytes: {0}.".FormatWith(CultureInfo.InvariantCulture, TokenType));
+            }
+        }
+
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="Nullable{Decimal}"/>.
+        /// Reads the next JSON token from the source as a <see cref="Nullable{T}"/> of <see cref="Double"/>.
         /// </summary>
-        /// <returns>A <see cref="Nullable{Decimal}"/>. This method will return <c>null</c> at the end of an array.</returns>
+        /// <returns>A <see cref="Nullable{T}"/> of <see cref="Double"/>. This method will return <c>null</c> at the end of an array.</returns>
         public virtual double? ReadAsDouble()
         {
             JsonToken t = GetContentToken();
@@ -623,7 +629,7 @@ namespace Newtonsoft.Json
                     if (!(Value is double))
                     {
                         double d;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
+#if HAVE_BIG_INTEGER
                         if (Value is BigInteger)
                         {
                             d = (double)(BigInteger)Value;
@@ -667,9 +673,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="Nullable{Boolean}"/>.
+        /// Reads the next JSON token from the source as a <see cref="Nullable{T}"/> of <see cref="Boolean"/>.
         /// </summary>
-        /// <returns>A <see cref="Nullable{Boolean}"/>. This method will return <c>null</c> at the end of an array.</returns>
+        /// <returns>A <see cref="Nullable{T}"/> of <see cref="Boolean"/>. This method will return <c>null</c> at the end of an array.</returns>
         public virtual bool? ReadAsBoolean()
         {
             JsonToken t = GetContentToken();
@@ -683,7 +689,7 @@ namespace Newtonsoft.Json
                 case JsonToken.Integer:
                 case JsonToken.Float:
                     bool b;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
+#if HAVE_BIG_INTEGER
                     if (Value is BigInteger)
                     {
                         b = (BigInteger)Value != 0;
@@ -728,9 +734,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="Nullable{Decimal}"/>.
+        /// Reads the next JSON token from the source as a <see cref="Nullable{T}"/> of <see cref="Decimal"/>.
         /// </summary>
-        /// <returns>A <see cref="Nullable{Decimal}"/>. This method will return <c>null</c> at the end of an array.</returns>
+        /// <returns>A <see cref="Nullable{T}"/> of <see cref="Decimal"/>. This method will return <c>null</c> at the end of an array.</returns>
         public virtual decimal? ReadAsDecimal()
         {
             JsonToken t = GetContentToken();
@@ -745,7 +751,19 @@ namespace Newtonsoft.Json
                 case JsonToken.Float:
                     if (!(Value is decimal))
                     {
-                        SetToken(JsonToken.Float, Convert.ToDecimal(Value, CultureInfo.InvariantCulture), false);
+                        decimal d;
+#if HAVE_BIG_INTEGER
+                        if (Value is BigInteger)
+                        {
+                            d = (decimal)(BigInteger)Value;
+                        }
+                        else
+#endif
+                        {
+                            d = Convert.ToDecimal(Value, CultureInfo.InvariantCulture);
+                        }
+
+                        SetToken(JsonToken.Float, d, false);
                     }
 
                     return (decimal)Value;
@@ -778,9 +796,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="Nullable{DateTime}"/>.
+        /// Reads the next JSON token from the source as a <see cref="Nullable{T}"/> of <see cref="DateTime"/>.
         /// </summary>
-        /// <returns>A <see cref="Nullable{DateTime}"/>. This method will return <c>null</c> at the end of an array.</returns>
+        /// <returns>A <see cref="Nullable{T}"/> of <see cref="DateTime"/>. This method will return <c>null</c> at the end of an array.</returns>
         public virtual DateTime? ReadAsDateTime()
         {
             switch (GetContentToken())
@@ -790,7 +808,7 @@ namespace Newtonsoft.Json
                 case JsonToken.EndArray:
                     return null;
                 case JsonToken.Date:
-#if !NET20
+#if HAVE_DATE_TIME_OFFSET
                     if (Value is DateTimeOffset)
                     {
                         SetToken(JsonToken.Date, ((DateTimeOffset)Value).DateTime, false);
@@ -832,11 +850,11 @@ namespace Newtonsoft.Json
             throw JsonReaderException.Create(this, "Could not convert string to DateTime: {0}.".FormatWith(CultureInfo.InvariantCulture, s));
         }
 
-#if !NET20
+#if HAVE_DATE_TIME_OFFSET
         /// <summary>
-        /// Reads the next JSON token from the stream as a <see cref="Nullable{DateTimeOffset}"/>.
+        /// Reads the next JSON token from the source as a <see cref="Nullable{T}"/> of <see cref="DateTimeOffset"/>.
         /// </summary>
-        /// <returns>A <see cref="Nullable{DateTimeOffset}"/>. This method will return <c>null</c> at the end of an array.</returns>
+        /// <returns>A <see cref="Nullable{T}"/> of <see cref="DateTimeOffset"/>. This method will return <c>null</c> at the end of an array.</returns>
         public virtual DateTimeOffset? ReadAsDateTimeOffset()
         {
             JsonToken t = GetContentToken();
@@ -959,7 +977,13 @@ namespace Newtonsoft.Json
             SetToken(newToken, value, true);
         }
 
-        internal void SetToken(JsonToken newToken, object value, bool updateIndex)
+        /// <summary>
+        /// Sets the current token and value.
+        /// </summary>
+        /// <param name="newToken">The new token.</param>
+        /// <param name="value">The value.</param>
+        /// <param name="updateIndex">A flag indicating whether the position index inside an array should be updated.</param>
+        protected void SetToken(JsonToken newToken, object value, bool updateIndex)
         {
             _tokenType = newToken;
             _value = value;
@@ -1008,7 +1032,7 @@ namespace Newtonsoft.Json
 
         internal void SetPostValueState(bool updateIndex)
         {
-            if (Peek() != JsonContainerType.None)
+            if (Peek() != JsonContainerType.None || SupportMultipleContent)
             {
                 _currentState = State.PostValue;
             }
@@ -1040,7 +1064,7 @@ namespace Newtonsoft.Json
                 throw JsonReaderException.Create(this, "JsonToken {0} is not valid for closing JsonType {1}.".FormatWith(CultureInfo.InvariantCulture, endToken, currentObject));
             }
 
-            if (Peek() != JsonContainerType.None)
+            if (Peek() != JsonContainerType.None || SupportMultipleContent)
             {
                 _currentState = State.PostValue;
             }
@@ -1103,9 +1127,6 @@ namespace Newtonsoft.Json
             }
         }
 
-        /// <summary>
-        /// Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
-        /// </summary>
         void IDisposable.Dispose()
         {
             Dispose(true);
@@ -1113,7 +1134,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Releases unmanaged and - optionally - managed resources
+        /// Releases unmanaged and - optionally - managed resources.
         /// </summary>
         /// <param name="disposing"><c>true</c> to release both managed and unmanaged resources; <c>false</c> to release only unmanaged resources.</param>
         protected virtual void Dispose(bool disposing)
@@ -1125,7 +1146,8 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Changes the <see cref="State"/> to Closed. 
+        /// Changes the reader's state to <see cref="JsonReader.State.Closed"/>.
+        /// If <see cref="JsonReader.CloseInput"/> is set to <c>true</c>, the source is also closed.
         /// </summary>
         public virtual void Close()
         {
@@ -1140,6 +1162,62 @@ namespace Newtonsoft.Json
             {
                 throw JsonSerializationException.Create(this, "Unexpected end when reading JSON.");
             }
+        }
+
+        internal void ReadForTypeAndAssert(JsonContract contract, bool hasConverter)
+        {
+            if (!ReadForType(contract, hasConverter))
+            {
+                throw JsonSerializationException.Create(this, "Unexpected end when reading JSON.");
+            }
+        }
+
+        internal bool ReadForType(JsonContract contract, bool hasConverter)
+        {
+            // don't read properties with converters as a specific value
+            // the value might be a string which will then get converted which will error if read as date for example
+            if (hasConverter)
+            {
+                return Read();
+            }
+
+            ReadType t = (contract != null) ? contract.InternalReadType : ReadType.Read;
+
+            switch (t)
+            {
+                case ReadType.Read:
+                    return ReadAndMoveToContent();
+                case ReadType.ReadAsInt32:
+                    ReadAsInt32();
+                    break;
+                case ReadType.ReadAsDecimal:
+                    ReadAsDecimal();
+                    break;
+                case ReadType.ReadAsDouble:
+                    ReadAsDouble();
+                    break;
+                case ReadType.ReadAsBytes:
+                    ReadAsBytes();
+                    break;
+                case ReadType.ReadAsBoolean:
+                    ReadAsBoolean();
+                    break;
+                case ReadType.ReadAsString:
+                    ReadAsString();
+                    break;
+                case ReadType.ReadAsDateTime:
+                    ReadAsDateTime();
+                    break;
+#if HAVE_DATE_TIME_OFFSET
+                case ReadType.ReadAsDateTimeOffset:
+                    ReadAsDateTimeOffset();
+                    break;
+#endif
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+
+            return (TokenType != JsonToken.None);
         }
 
         internal bool ReadAndMoveToContent()

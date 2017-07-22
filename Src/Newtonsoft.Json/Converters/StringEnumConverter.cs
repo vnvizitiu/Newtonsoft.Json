@@ -31,7 +31,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Runtime.Serialization;
 using Newtonsoft.Json.Utilities;
-#if NET20
+#if !HAVE_LINQ
 using Newtonsoft.Json.Utilities.LinqBridge;
 #else
 using System.Linq;
@@ -95,6 +95,11 @@ namespace Newtonsoft.Json.Converters
 
             if (char.IsNumber(enumName[0]) || enumName[0] == '-')
             {
+                if (!AllowIntegerValues)
+                {
+                    throw JsonSerializationException.Create(null, writer.ContainerPath, "Integer value {0} is not allowed.".FormatWith(CultureInfo.InvariantCulture, enumName), null);
+                }
+
                 // enum value has no name so write number
                 writer.WriteValue(value);
             }

@@ -35,7 +35,11 @@ namespace Newtonsoft.Json.Serialization
     /// <summary>
     /// The default serialization binder used when resolving and loading classes from type names.
     /// </summary>
-    public class DefaultSerializationBinder : SerializationBinder, ISerializationBinder
+    public class DefaultSerializationBinder :
+#pragma warning disable 618
+        SerializationBinder,
+#pragma warning restore 618
+        ISerializationBinder
     {
         internal static readonly DefaultSerializationBinder Instance = new DefaultSerializationBinder();
 
@@ -70,7 +74,7 @@ namespace Newtonsoft.Json.Serialization
                 assembly = Assembly.Load(assemblyName);
 #endif
 
-#if !(PORTABLE40 || PORTABLE || DOTNET)
+#if HAVE_APP_DOMAIN
                 if (assembly == null)
                 {
                     // will find assemblies loaded with Assembly.LoadFile outside of the main directory
@@ -177,8 +181,8 @@ namespace Newtonsoft.Json.Serialization
         /// <summary>
         /// When overridden in a derived class, controls the binding of a serialized object to a type.
         /// </summary>
-        /// <param name="assemblyName">Specifies the <see cref="T:System.Reflection.Assembly"/> name of the serialized object.</param>
-        /// <param name="typeName">Specifies the <see cref="T:System.Type"/> name of the serialized object.</param>
+        /// <param name="assemblyName">Specifies the <see cref="Assembly"/> name of the serialized object.</param>
+        /// <param name="typeName">Specifies the <see cref="System.Type"/> name of the serialized object.</param>
         /// <returns>
         /// The type of the object the formatter creates a new instance of.
         /// </returns>
@@ -191,15 +195,15 @@ namespace Newtonsoft.Json.Serialization
         /// When overridden in a derived class, controls the binding of a serialized object to a type.
         /// </summary>
         /// <param name="serializedType">The type of the object the formatter creates a new instance of.</param>
-        /// <param name="assemblyName">Specifies the <see cref="T:System.Reflection.Assembly"/> name of the serialized object. </param>
-        /// <param name="typeName">Specifies the <see cref="T:System.Type"/> name of the serialized object. </param>
+        /// <param name="assemblyName">Specifies the <see cref="Assembly"/> name of the serialized object.</param>
+        /// <param name="typeName">Specifies the <see cref="System.Type"/> name of the serialized object.</param>
         public
-#if !(NET35 || NET20)
+#if HAVE_SERIALIZATION_BINDER_BIND_TO_NAME
         override
 #endif
         void BindToName(Type serializedType, out string assemblyName, out string typeName)
         {
-#if (DOTNET || PORTABLE)
+#if !HAVE_FULL_REFLECTION
             assemblyName = serializedType.GetTypeInfo().Assembly.FullName;
             typeName = serializedType.FullName;
 #else

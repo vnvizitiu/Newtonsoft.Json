@@ -65,7 +65,7 @@ namespace Newtonsoft.Json.Linq
         }
 
         /// <summary>
-        /// Reads the next JSON token from the stream.
+        /// Reads the next JSON token from the underlying <see cref="JToken"/>.
         /// </summary>
         /// <returns>
         /// <c>true</c> if the next token was read successfully; <c>false</c> if there are no more tokens to read.
@@ -140,7 +140,7 @@ namespace Newtonsoft.Json.Linq
                 case JTokenType.Property:
                     return null;
                 default:
-                    throw MiscellaneousUtils.CreateArgumentOutOfRangeException("Type", c.Type, "Unexpected JContainer type.");
+                    throw MiscellaneousUtils.CreateArgumentOutOfRangeException(nameof(c.Type), c.Type, "Unexpected JContainer type.");
             }
         }
 
@@ -227,26 +227,20 @@ namespace Newtonsoft.Json.Linq
                     break;
                 case JTokenType.Uri:
                     object v = ((JValue)token).Value;
-                    if (v is Uri)
-                    {
-                        SetToken(JsonToken.String, ((Uri)v).OriginalString);
-                    }
-                    else
-                    {
-                        SetToken(JsonToken.String, SafeToString(v));
-                    }
+                    Uri uri = v as Uri;
+                    SetToken(JsonToken.String, uri != null ? uri.OriginalString : SafeToString(v));
                     break;
                 case JTokenType.TimeSpan:
                     SetToken(JsonToken.String, SafeToString(((JValue)token).Value));
                     break;
                 default:
-                    throw MiscellaneousUtils.CreateArgumentOutOfRangeException("Type", token.Type, "Unexpected JTokenType.");
+                    throw MiscellaneousUtils.CreateArgumentOutOfRangeException(nameof(token.Type), token.Type, "Unexpected JTokenType.");
             }
         }
 
         private string SafeToString(object value)
         {
-            return (value != null) ? value.ToString() : null;
+            return value?.ToString();
         }
 
         bool IJsonLineInfo.HasLineInfo()

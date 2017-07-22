@@ -28,7 +28,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using Newtonsoft.Json.Linq;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
+#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_3
 using System.Numerics;
 #endif
 using System.Text;
@@ -1043,7 +1043,7 @@ namespace Newtonsoft.Json.Tests.JsonTextReaderTests
 
 #if !DNXCORE50
         [Test]
-        [Ignore]
+        [Ignore("Probably not a Json.NET issue")]
         public void ReadFromNetworkStream()
         {
             const int port = 11999;
@@ -1194,7 +1194,7 @@ third line", jsonTextReader.Value);
 
 
 
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
+#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_3
         [Test]
         public void ReadBigInteger()
         {

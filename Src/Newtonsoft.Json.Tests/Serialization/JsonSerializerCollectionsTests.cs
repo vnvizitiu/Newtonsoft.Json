@@ -25,11 +25,9 @@
 
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Specialized;
 using System.Runtime.Serialization;
-#if !(NET35 || NET20 || PORTABLE || PORTABLE40)
-using System.Collections.Concurrent;
-#endif
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
@@ -63,6 +61,86 @@ namespace Newtonsoft.Json.Tests.Serialization
     [TestFixture]
     public class JsonSerializerCollectionsTests : TestFixtureBase
     {
+#if !(NET20 || NET35)
+        [Test]
+        public void SerializeConcurrentQueue()
+        {
+            ConcurrentQueue<int> queue1 = new ConcurrentQueue<int>();
+            queue1.Enqueue(1);
+
+            string output = JsonConvert.SerializeObject(queue1);
+            Assert.AreEqual(@"[1]", output);
+
+            ConcurrentQueue<int> queue2 = JsonConvert.DeserializeObject<ConcurrentQueue<int>>(output);
+            int i;
+            Assert.IsTrue(queue2.TryDequeue(out i));
+            Assert.AreEqual(1, i);
+        }
+
+        [Test]
+        public void SerializeConcurrentBag()
+        {
+            ConcurrentBag<int> bag1 = new ConcurrentBag<int>();
+            bag1.Add(1);
+
+            string output = JsonConvert.SerializeObject(bag1);
+            Assert.AreEqual(@"[1]", output);
+
+            ConcurrentBag<int> bag2 = JsonConvert.DeserializeObject<ConcurrentBag<int>>(output);
+            int i;
+            Assert.IsTrue(bag2.TryTake(out i));
+            Assert.AreEqual(1, i);
+        }
+
+        [Test]
+        public void SerializeConcurrentStack()
+        {
+            ConcurrentStack<int> stack1 = new ConcurrentStack<int>();
+            stack1.Push(1);
+
+            string output = JsonConvert.SerializeObject(stack1);
+            Assert.AreEqual(@"[1]", output);
+
+            ConcurrentStack<int> stack2 = JsonConvert.DeserializeObject<ConcurrentStack<int>>(output);
+            int i;
+            Assert.IsTrue(stack2.TryPop(out i));
+            Assert.AreEqual(1, i);
+        }
+#endif
+
+        [Test]
+        public void DoubleKey_WholeValue()
+        {
+            Dictionary<double, int> dictionary = new Dictionary<double, int> { { 1d, 1 } };
+            string output = JsonConvert.SerializeObject(dictionary);
+            Assert.AreEqual(@"{""1"":1}", output);
+
+            Dictionary<double, int> deserializedValue = JsonConvert.DeserializeObject<Dictionary<double, int>>(output);
+            Assert.AreEqual(1d, deserializedValue.First().Key);
+        }
+
+        [Test]
+        public void DoubleKey_MaxValue()
+        {
+            Dictionary<double, int> dictionary = new Dictionary<double, int> { { double.MaxValue, 1 } };
+            string output = JsonConvert.SerializeObject(dictionary);
+            Assert.AreEqual(@"{""1.7976931348623157E+308"":1}", output);
+
+            Dictionary<double, int> deserializedValue = JsonConvert.DeserializeObject<Dictionary<double, int>>(output);
+            Assert.AreEqual(double.MaxValue, deserializedValue.First().Key);
+        }
+
+        [Test]
+        public void FloatKey_MaxValue()
+        {
+            Dictionary<float, int> dictionary = new Dictionary<float, int> { { float.MaxValue, 1 } };
+            string output = JsonConvert.SerializeObject(dictionary);
+            Assert.AreEqual(@"{""3.40282347E+38"":1}", output);
+
+            Dictionary<float, int> deserializedValue = JsonConvert.DeserializeObject<Dictionary<float, int>>(output);
+            Assert.AreEqual(float.MaxValue, deserializedValue.First().Key);
+        }
+
         public class TestCollectionPrivateParameterized : IEnumerable<int>
         {
             private readonly List<int> _bars;

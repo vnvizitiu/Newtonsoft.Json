@@ -28,7 +28,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Threading;
 using System.Globalization;
-#if NET20
+#if !HAVE_LINQ
 using Newtonsoft.Json.Utilities.LinqBridge;
 #else
 using System.Linq;
@@ -52,9 +52,10 @@ namespace Newtonsoft.Json.Utilities
         {
             ValidationUtils.ArgumentNotNull(list, nameof(list));
 
-            if (list is ICollection<T>)
+            ICollection<T> collection = list as ICollection<T>;
+            if (collection != null)
             {
-                _genericCollection = (ICollection<T>)list;
+                _genericCollection = collection;
             }
             else
             {
@@ -168,24 +169,12 @@ namespace Newtonsoft.Json.Utilities
 
         public virtual IEnumerator<T> GetEnumerator()
         {
-            if (_genericCollection != null)
-            {
-                return _genericCollection.GetEnumerator();
-            }
-
-            return _list.Cast<T>().GetEnumerator();
+            return (_genericCollection ?? _list.Cast<T>()).GetEnumerator();
         }
 
         IEnumerator IEnumerable.GetEnumerator()
         {
-            if (_genericCollection != null)
-            {
-                return _genericCollection.GetEnumerator();
-            }
-            else
-            {
-                return _list.GetEnumerator();
-            }
+            return ((IEnumerable)_genericCollection ?? _list).GetEnumerator();
         }
 
         int IList.Add(object value)
@@ -332,17 +321,7 @@ namespace Newtonsoft.Json.Utilities
 
         public object UnderlyingCollection
         {
-            get
-            {
-                if (_genericCollection != null)
-                {
-                    return _genericCollection;
-                }
-                else
-                {
-                    return _list;
-                }
-            }
+            get { return (object)_genericCollection ?? _list; }
         }
     }
 }

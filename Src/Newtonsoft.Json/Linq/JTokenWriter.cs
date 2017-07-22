@@ -1,4 +1,4 @@
-﻿#region License
+#region License
 // Copyright (c) 2007 James Newton-King
 //
 // Permission is hereby granted, free of charge, to any person
@@ -25,7 +25,7 @@
 
 using System;
 using System.Globalization;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
+#if HAVE_BIG_INTEGER
 using System.Numerics;
 #endif
 using Newtonsoft.Json.Utilities;
@@ -35,7 +35,7 @@ namespace Newtonsoft.Json.Linq
     /// <summary>
     /// Represents a writer that provides a fast, non-cached, forward-only way of generating JSON data.
     /// </summary>
-    public class JTokenWriter : JsonWriter
+    public partial class JTokenWriter : JsonWriter
     {
         private JContainer _token;
         private JContainer _parent;
@@ -52,9 +52,9 @@ namespace Newtonsoft.Json.Linq
         }
 
         /// <summary>
-        /// Gets the token being writen.
+        /// Gets the token being written.
         /// </summary>
-        /// <value>The token being writen.</value>
+        /// <value>The token being written.</value>
         public JToken Token
         {
             get
@@ -88,15 +88,19 @@ namespace Newtonsoft.Json.Linq
         }
 
         /// <summary>
-        /// Flushes whatever is in the buffer to the underlying streams and also flushes the underlying stream.
+        /// Flushes whatever is in the buffer to the underlying <see cref="JContainer"/>.
         /// </summary>
         public override void Flush()
         {
         }
 
         /// <summary>
-        /// Closes this stream and the underlying stream.
+        /// Closes this writer.
+        /// If <see cref="JsonWriter.AutoCompleteOnClose"/> is set to <c>true</c>, the JSON is auto-completed.
         /// </summary>
+        /// <remarks>
+        /// Setting <see cref="JsonWriter.CloseOutput"/> to <c>true</c> has no additional effect, since the underlying <see cref="JContainer"/> is a type that cannot be closed.
+        /// </remarks>
         public override void Close()
         {
             base.Close();
@@ -174,13 +178,9 @@ namespace Newtonsoft.Json.Linq
         /// <param name="name">The name of the property.</param>
         public override void WritePropertyName(string name)
         {
-            JObject o = _parent as JObject;
-            if (o != null)
-            {
-                // avoid duplicate property name exception
-                // last property name wins
-                o.Remove(name);
-            }
+            // avoid duplicate property name exception
+            // last property name wins
+            (_parent as JObject)?.Remove(name);
 
             AddParent(new JProperty(name));
 
@@ -216,12 +216,12 @@ namespace Newtonsoft.Json.Linq
         #region WriteValue methods
         /// <summary>
         /// Writes a <see cref="Object"/> value.
-        /// An error will raised if the value cannot be written as a single JSON token.
+        /// An error will be raised if the value cannot be written as a single JSON token.
         /// </summary>
         /// <param name="value">The <see cref="Object"/> value to write.</param>
         public override void WriteValue(object value)
         {
-#if !(NET20 || NET35 || PORTABLE || PORTABLE40) || NETSTANDARD1_1
+#if HAVE_BIG_INTEGER
             if (value is BigInteger)
             {
                 InternalWriteValue(JsonToken.Integer);
@@ -263,7 +263,7 @@ namespace Newtonsoft.Json.Linq
         }
 
         /// <summary>
-        /// Writes out a comment <code>/*...*/</code> containing the specified text.
+        /// Writes a comment <c>/*...*/</c> containing the specified text.
         /// </summary>
         /// <param name="text">Text to place inside the comment.</param>
         public override void WriteComment(string text)
@@ -383,7 +383,7 @@ namespace Newtonsoft.Json.Linq
         {
             base.WriteValue(value);
             string s = null;
-#if !(DOTNET || PORTABLE40 || PORTABLE)
+#if HAVE_CHAR_TO_STRING_WITH_CULTURE
             s = value.ToString(CultureInfo.InvariantCulture);
 #else
             s = value.ToString();
@@ -433,7 +433,7 @@ namespace Newtonsoft.Json.Linq
             AddValue(value, JsonToken.Date);
         }
 
-#if !NET20
+#if HAVE_DATE_TIME_OFFSET
         /// <summary>
         /// Writes a <see cref="DateTimeOffset"/> value.
         /// </summary>
@@ -490,7 +490,7 @@ namespace Newtonsoft.Json.Linq
         {
             JTokenReader tokenReader = reader as JTokenReader;
 
-            // closing the token wrather than reading then writing it doesn't lose some type information, e.g. Guid, byte[], etc
+            // cloning the token rather than reading then writing it doesn't lose some type information, e.g. Guid, byte[], etc
             if (tokenReader != null && writeChildren && writeDateConstructorAsDate && writeComments)
             {
                 if (tokenReader.TokenType == JsonToken.None)

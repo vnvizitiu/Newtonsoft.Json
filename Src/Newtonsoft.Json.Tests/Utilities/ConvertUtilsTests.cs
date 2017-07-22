@@ -39,6 +39,7 @@ namespace Newtonsoft.Json.Tests.Utilities
     [TestFixture]
     public class ConvertUtilsTests : TestFixtureBase
     {
+#if HAS_CUSTOM_DOUBLE_PARSE
         private void AssertDoubleTryParse(string s, ParseResult expectedResult, double? expectedValue)
         {
             double d;
@@ -157,6 +158,107 @@ namespace Newtonsoft.Json.Tests.Utilities
 
             AssertDoubleTryParse("4.94065645841247E+555", ParseResult.Overflow, null);
         }
+#endif
+
+        private void AssertDecimalTryParse(string s, ParseResult expectedResult, decimal? expectedValue)
+        {
+            decimal d;
+            char[] c = s.ToCharArray();
+            ParseResult result = ConvertUtils.DecimalTryParse(c, 0, c.Length, out d);
+
+            decimal d2;
+            bool result2 = decimal.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out d2)
+                && !s.StartsWith(".")
+                && !s.EndsWith(".")
+                && !(s.StartsWith("0") && s.Length > 1 && !s.StartsWith("0.") && !s.StartsWith("0e", StringComparison.OrdinalIgnoreCase))
+                && !(s.StartsWith("-0") && s.Length > 2 && !s.StartsWith("-0.") && !s.StartsWith("-0e", StringComparison.OrdinalIgnoreCase))
+                && s.IndexOf(".e", StringComparison.OrdinalIgnoreCase) == -1;
+
+            Assert.AreEqual(expectedResult, result);
+            Assert.AreEqual(expectedResult == ParseResult.Success, result2);
+
+            if (result2)
+            {
+                Assert.IsTrue(expectedValue.HasValue);
+
+                Assert.AreEqual(expectedValue.Value, d, "Input string: " + s);
+
+                Assert.AreEqual(expectedValue.Value, d2, "DecimalTryParse result is not equal to decimal.Parse. Input string: " + s);
+
+                Assert.AreEqual(expectedValue.Value.ToString(), d.ToString());
+            }
+        }
+
+        [Test]
+        public void DecimalTryParse()
+        {
+            AssertDecimalTryParse("0", ParseResult.Success, 0M);
+            AssertDecimalTryParse("-0", ParseResult.Success, 0M);
+            AssertDecimalTryParse("1", ParseResult.Success, 1M);
+            AssertDecimalTryParse("-1", ParseResult.Success, -1M);
+            AssertDecimalTryParse("1E1", ParseResult.Success, 10M);
+            AssertDecimalTryParse("1E28", ParseResult.Success, 10000000000000000000000000000M);
+            AssertDecimalTryParse("1.0", ParseResult.Success, 1.0M);
+            AssertDecimalTryParse("1.10000", ParseResult.Success, 1.10000M);
+            AssertDecimalTryParse("1000.000000000000", ParseResult.Success, 1000.000000000000M);
+            AssertDecimalTryParse("87.50", ParseResult.Success, 87.50M);
+
+            AssertDecimalTryParse("1.2345678901234567890123456789", ParseResult.Success, 1.2345678901234567890123456789M);
+            AssertDecimalTryParse("1.0000000000000000000000000001", ParseResult.Success, 1.0000000000000000000000000001M);
+            AssertDecimalTryParse("-1.0000000000000000000000000001", ParseResult.Success, -1.0000000000000000000000000001M);
+
+            AssertDecimalTryParse(decimal.MaxValue.ToString(CultureInfo.InvariantCulture), ParseResult.Success, decimal.MaxValue);
+            AssertDecimalTryParse(decimal.MinValue.ToString(CultureInfo.InvariantCulture), ParseResult.Success, decimal.MinValue);
+
+            AssertDecimalTryParse("12345678901234567890123456789", ParseResult.Success, 12345678901234567890123456789M);
+            AssertDecimalTryParse("12345678901234567890123456789.4", ParseResult.Success, 12345678901234567890123456789M);
+            AssertDecimalTryParse("12345678901234567890123456789.5", ParseResult.Success, 12345678901234567890123456790M);
+            AssertDecimalTryParse("-12345678901234567890123456789", ParseResult.Success, -12345678901234567890123456789M);
+            AssertDecimalTryParse("-12345678901234567890123456789.4", ParseResult.Success, -12345678901234567890123456789M);
+            AssertDecimalTryParse("-12345678901234567890123456789.5", ParseResult.Success, -12345678901234567890123456790M);
+
+            AssertDecimalTryParse("1.2345678901234567890123456789e-25", ParseResult.Success, 0.0000000000000000000000001235M);
+            AssertDecimalTryParse("1.2345678901234567890123456789e-26", ParseResult.Success, 0.0000000000000000000000000123M);
+            AssertDecimalTryParse("1.2345678901234567890123456789e-28", ParseResult.Success, 0.0000000000000000000000000001M);
+            AssertDecimalTryParse("1.2345678901234567890123456789e-29", ParseResult.Success, 0M);
+
+#if !(NET20 || NET35)
+            AssertDecimalTryParse("1E-999", ParseResult.Success, 0M);
+#endif
+
+            for (decimal i = -100; i < 100; i += 0.1m)
+            {
+                AssertDecimalTryParse(i.ToString(CultureInfo.InvariantCulture), ParseResult.Success, i);
+            }
+
+            AssertDecimalTryParse("1E+29", ParseResult.Overflow, null);
+            AssertDecimalTryParse("-1E+29", ParseResult.Overflow, null);
+
+            AssertDecimalTryParse("1-1", ParseResult.Invalid, null);
+            AssertDecimalTryParse("1-", ParseResult.Invalid, null);
+            AssertDecimalTryParse("--1", ParseResult.Invalid, null);
+            AssertDecimalTryParse("-", ParseResult.Invalid, null);
+            AssertDecimalTryParse(".", ParseResult.Invalid, null);
+            AssertDecimalTryParse("01E28", ParseResult.Invalid, null);
+            AssertDecimalTryParse("-01E28", ParseResult.Invalid, null);
+            AssertDecimalTryParse("1.", ParseResult.Invalid, null);
+            AssertDecimalTryParse("0.", ParseResult.Invalid, null);
+            AssertDecimalTryParse(".1E23", ParseResult.Invalid, null);
+            AssertDecimalTryParse("1..1E23", ParseResult.Invalid, null);
+            AssertDecimalTryParse("1.E23", ParseResult.Invalid, null);
+            AssertDecimalTryParse("1E2.3", ParseResult.Invalid, null);
+            AssertDecimalTryParse("1EE-10", ParseResult.Invalid, null);
+            AssertDecimalTryParse("1E-1-0", ParseResult.Invalid, null);
+            AssertDecimalTryParse("1-E10", ParseResult.Invalid, null);
+            AssertDecimalTryParse("", ParseResult.Invalid, null);
+            AssertDecimalTryParse("5.1231231E", ParseResult.Invalid, null);
+            AssertDecimalTryParse("1E+23i", ParseResult.Invalid, null);
+            AssertDecimalTryParse("1EE+23", ParseResult.Invalid, null);
+            AssertDecimalTryParse("1E++23", ParseResult.Invalid, null);
+            AssertDecimalTryParse("1E--23", ParseResult.Invalid, null);
+            AssertDecimalTryParse("E23", ParseResult.Invalid, null);
+            AssertDecimalTryParse("00", ParseResult.Invalid, null);
+        }
 
         [Test]
         public void Int64TryParse()
@@ -269,25 +371,28 @@ namespace Newtonsoft.Json.Tests.Utilities
         [Test]
         public void HexParseOffset()
         {
-            int value = ConvertUtils.HexTextToInt("!0000".ToCharArray(), 1, 5);
+            int value;
+            Assert.IsTrue(ConvertUtils.TryHexTextToInt("!0000".ToCharArray(), 1, 5, out value));
             Assert.AreEqual(0, value);
         }
 
         [Test]
         public void HexParseError()
         {
-            ExceptionAssert.Throws<FormatException>(() => { ConvertUtils.HexTextToInt("-100".ToCharArray(), 0, 4); }, "Invalid hex character: -");
-            ExceptionAssert.Throws<FormatException>(() => { ConvertUtils.HexTextToInt("000g".ToCharArray(), 0, 4); }, "Invalid hex character: g");
-            ExceptionAssert.Throws<FormatException>(() => { ConvertUtils.HexTextToInt(" ssd".ToCharArray(), 0, 4); }, "Invalid hex character:  ");
-            ExceptionAssert.Throws<FormatException>(() => { ConvertUtils.HexTextToInt("000:".ToCharArray(), 0, 4); }, "Invalid hex character: :");
-            ExceptionAssert.Throws<FormatException>(() => { ConvertUtils.HexTextToInt("000G".ToCharArray(), 0, 4); }, "Invalid hex character: G");
+            int value;
+            Assert.IsFalse(ConvertUtils.TryHexTextToInt("-100".ToCharArray(), 0, 4, out value));
+            Assert.IsFalse(ConvertUtils.TryHexTextToInt("000g".ToCharArray(), 0, 4, out value));
+            Assert.IsFalse(ConvertUtils.TryHexTextToInt(" ssd".ToCharArray(), 0, 4, out value));
+            Assert.IsFalse(ConvertUtils.TryHexTextToInt("000:".ToCharArray(), 0, 4, out value));
+            Assert.IsFalse(ConvertUtils.TryHexTextToInt("000G".ToCharArray(), 0, 4, out value));
         }
 
         private void HexParseSame(string text)
         {
             int v1 = int.Parse(text, NumberStyles.HexNumber, CultureInfo.InvariantCulture);
 
-            int v2 = ConvertUtils.HexTextToInt(text.ToCharArray(), 0, 4);
+            int v2;
+            Assert.IsTrue(ConvertUtils.TryHexTextToInt(text.ToCharArray(), 0, 4, out v2));
 
             Assert.AreEqual(v1, v2, "Invalid result when parsing hex text: " + text);
         }

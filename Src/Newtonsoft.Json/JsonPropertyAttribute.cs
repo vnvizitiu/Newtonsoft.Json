@@ -55,13 +55,15 @@ namespace Newtonsoft.Json
         public Type ItemConverterType { get; set; }
 
         /// <summary>
-        /// The parameter list to use when constructing the <see cref="JsonConverter"/> described by ItemConverterType.
-        /// If null, the default constructor is used.
-        /// When non-null, there must be a constructor defined in the <see cref="JsonConverter"/> that exactly matches the number,
+        /// The parameter list to use when constructing the <see cref="JsonConverter"/> described by <see cref="ItemConverterType"/>.
+        /// If <c>null</c>, the default constructor is used.
+        /// When non-<c>null</c>, there must be a constructor defined in the <see cref="JsonConverter"/> that exactly matches the number,
         /// order, and type of these parameters.
         /// </summary>
         /// <example>
+        /// <code>
         /// [JsonProperty(ItemConverterType = typeof(MyContainerConverter), ItemConverterParameters = new object[] { 123, "Four" })]
+        /// </code>
         /// </example>
         public object[] ItemConverterParameters { get; set; }
 
@@ -72,13 +74,15 @@ namespace Newtonsoft.Json
         public Type NamingStrategyType { get; set; }
 
         /// <summary>
-        /// The parameter list to use when constructing the <see cref="NamingStrategy"/> described by NamingStrategyType.  
-        /// If null, the default constructor is used.
-        /// When non-null, there must be a constructor defined in the <see cref="NamingStrategy"/> that exactly matches the number,
+        /// The parameter list to use when constructing the <see cref="NamingStrategy"/> described by <see cref="JsonPropertyAttribute.NamingStrategyType"/>.
+        /// If <c>null</c>, the default constructor is used.
+        /// When non-<c>null</c>, there must be a constructor defined in the <see cref="NamingStrategy"/> that exactly matches the number,
         /// order, and type of these parameters.
         /// </summary>
         /// <example>
+        /// <code>
         /// [JsonProperty(NamingStrategyType = typeof(MyNamingStrategy), NamingStrategyParameters = new object[] { 123, "Four" })]
+        /// </code>
         /// </example>
         public object[] NamingStrategyParameters { get; set; }
 
@@ -171,7 +175,7 @@ namespace Newtonsoft.Json
         public string PropertyName { get; set; }
 
         /// <summary>
-        /// Gets or sets the the reference loop handling used when serializing the property's collection items.
+        /// Gets or sets the reference loop handling used when serializing the property's collection items.
         /// </summary>
         /// <value>The collection's items reference loop handling.</value>
         public ReferenceLoopHandling ItemReferenceLoopHandling
@@ -181,7 +185,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Gets or sets the the type name handling used when serializing the property's collection items.
+        /// Gets or sets the type name handling used when serializing the property's collection items.
         /// </summary>
         /// <value>The collection's items type name handling.</value>
         public TypeNameHandling ItemTypeNameHandling

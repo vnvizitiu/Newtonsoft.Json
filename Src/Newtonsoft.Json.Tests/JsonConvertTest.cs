@@ -24,11 +24,13 @@
 #endregion
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using Newtonsoft.Json.Schema;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
+#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_3
 using System.Numerics;
 #endif
 using System.Runtime.Serialization;
@@ -885,9 +887,11 @@ namespace Newtonsoft.Json.Tests
         {
             Console.WriteLine(name);
 
-            DateTimeResult result = new DateTimeResult();
+            DateTimeResult result = new DateTimeResult()
+            {
+                IsoDateRoundtrip = TestDateTimeFormat(value, DateFormatHandling.IsoDateFormat, DateTimeZoneHandling.RoundtripKind)
+            };
 
-            result.IsoDateRoundtrip = TestDateTimeFormat(value, DateFormatHandling.IsoDateFormat, DateTimeZoneHandling.RoundtripKind);
             if (value is DateTime)
             {
                 result.IsoDateLocal = TestDateTimeFormat(value, DateFormatHandling.IsoDateFormat, DateTimeZoneHandling.Local);
@@ -947,11 +951,7 @@ namespace Newtonsoft.Json.Tests
             if (timeZoneHandling == DateTimeZoneHandling.RoundtripKind)
             {
                 T parsed = JsonConvert.DeserializeObject<T>(date);
-                try
-                {
-                    Assert.AreEqual(value, parsed);
-                }
-                catch (Exception)
+                if (!value.Equals(parsed))
                 {
                     long valueTicks = GetTicks(value);
                     long parsedTicks = GetTicks(parsed);
@@ -1012,95 +1012,6 @@ namespace Newtonsoft.Json.Tests
             return (T)converter.ReadJson(reader, typeof(T), null, null);
         }
 
-#if !(NET20 || NET35 || PORTABLE40)
-        [Test]
-        public void Async()
-        {
-            Task<string> task = null;
-
-#pragma warning disable 612,618
-            task = JsonConvert.SerializeObjectAsync(42);
-#pragma warning restore 612,618
-            task.Wait();
-
-            Assert.AreEqual("42", task.Result);
-
-#pragma warning disable 612,618
-            task = JsonConvert.SerializeObjectAsync(new[] { 1, 2, 3, 4, 5 }, Formatting.Indented);
-#pragma warning restore 612,618
-            task.Wait();
-
-            StringAssert.AreEqual(@"[
-  1,
-  2,
-  3,
-  4,
-  5
-]", task.Result);
-
-#pragma warning disable 612,618
-            task = JsonConvert.SerializeObjectAsync(DateTime.MaxValue, Formatting.None, new JsonSerializerSettings
-            {
-                DateFormatHandling = DateFormatHandling.MicrosoftDateFormat
-            });
-#pragma warning restore 612,618
-            task.Wait();
-
-            Assert.AreEqual(@"""\/Date(253402300799999)\/""", task.Result);
-
-#pragma warning disable 612,618
-            var taskObject = JsonConvert.DeserializeObjectAsync("[]");
-#pragma warning restore 612,618
-            taskObject.Wait();
-
-            CollectionAssert.AreEquivalent(new JArray(), (JArray)taskObject.Result);
-
-#pragma warning disable 612,618
-            Task<object> taskVersionArray = JsonConvert.DeserializeObjectAsync("['2.0']", typeof(Version[]), new JsonSerializerSettings
-            {
-                Converters = { new VersionConverter() }
-            });
-#pragma warning restore 612,618
-            taskVersionArray.Wait();
-
-            Version[] versionArray = (Version[])taskVersionArray.Result;
-
-            Assert.AreEqual(1, versionArray.Length);
-            Assert.AreEqual(2, versionArray[0].Major);
-
-#pragma warning disable 612,618
-            Task<int> taskInt = JsonConvert.DeserializeObjectAsync<int>("5");
-#pragma warning restore 612,618
-            taskInt.Wait();
-
-            Assert.AreEqual(5, taskInt.Result);
-
-#pragma warning disable 612,618
-            var taskVersion = JsonConvert.DeserializeObjectAsync<Version>("'2.0'", new JsonSerializerSettings
-            {
-                Converters = { new VersionConverter() }
-            });
-#pragma warning restore 612,618
-            taskVersion.Wait();
-
-            Assert.AreEqual(2, taskVersion.Result.Major);
-
-            Movie p = new Movie();
-            p.Name = "Existing,";
-
-#pragma warning disable 612,618
-            Task taskVoid = JsonConvert.PopulateObjectAsync("{'Name':'Appended'}", p, new JsonSerializerSettings
-            {
-                Converters = new List<JsonConverter> { new StringAppenderConverter() }
-            });
-#pragma warning restore 612,618
-
-            taskVoid.Wait();
-
-            Assert.AreEqual("Existing,Appended", p.Name);
-        }
-#endif
-
         [Test]
         public void SerializeObjectDateTimeZoneHandling()
         {
@@ -1141,10 +1052,12 @@ namespace Newtonsoft.Json.Tests
             var now = DateTimeOffset.Now;
             var dict = new Dictionary<string, object> { { "foo", now } };
 
-            var settings = new JsonSerializerSettings();
-            settings.DateFormatHandling = DateFormatHandling.IsoDateFormat;
-            settings.DateParseHandling = DateParseHandling.DateTimeOffset;
-            settings.DateTimeZoneHandling = DateTimeZoneHandling.RoundtripKind;
+            var settings = new JsonSerializerSettings()
+            {
+                DateFormatHandling = DateFormatHandling.IsoDateFormat,
+                DateParseHandling = DateParseHandling.DateTimeOffset,
+                DateTimeZoneHandling = DateTimeZoneHandling.RoundtripKind
+            };
             var json = JsonConvert.SerializeObject(dict, settings);
 
             var newDict = new Dictionary<string, object>();
@@ -1190,14 +1103,15 @@ namespace Newtonsoft.Json.Tests
             DateTime dt = DateTime.MaxValue;
 
             StringWriter sw = new StringWriter();
-            JsonTextWriter writer = new JsonTextWriter(sw);
-            writer.DateFormatHandling = DateFormatHandling.MicrosoftDateFormat;
-
+            JsonTextWriter writer = new JsonTextWriter(sw)
+            {
+                DateFormatHandling = DateFormatHandling.MicrosoftDateFormat
+            };
             writer.WriteValue(dt);
             writer.Flush();
         }
 
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
+#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_3
         [Test]
         public void IntegerLengthOverflows()
         {
@@ -1717,6 +1631,172 @@ namespace Newtonsoft.Json.Tests
 
         public class NonGenericChildClass : GenericIntermediateClass<int>
         {
+        }
+
+        [Test]
+        public void ShouldNotPopulateReadOnlyEnumerableObjectWithNonDefaultConstructor()
+        {
+            object actual = JsonConvert.DeserializeObject<HasReadOnlyEnumerableObject>("{\"foo\":{}}");
+            Assert.IsNotNull(actual);
+        }
+
+        [Test]
+        public void ShouldNotPopulateReadOnlyEnumerableObjectWithDefaultConstructor()
+        {
+            object actual = JsonConvert.DeserializeObject<HasReadOnlyEnumerableObjectAndDefaultConstructor>("{\"foo\":{}}");
+            Assert.IsNotNull(actual);
+        }
+
+        [Test]
+        public void ShouldNotPopulateContructorArgumentEnumerableObject()
+        {
+            object actual = JsonConvert.DeserializeObject<AcceptsEnumerableObjectToConstructor>("{\"foo\":{}}");
+            Assert.IsNotNull(actual);
+        }
+
+        [Test]
+        public void ShouldNotPopulateEnumerableObjectProperty()
+        {
+            object actual = JsonConvert.DeserializeObject<HasEnumerableObject>("{\"foo\":{}}");
+            Assert.IsNotNull(actual);
+        }
+
+#if !(NET40 || NET35 || NET20 || PORTABLE40)
+        [Test]
+        public void ShouldNotPopulateReadOnlyDictionaryObjectWithNonDefaultConstructor()
+        {
+            object actual = JsonConvert.DeserializeObject<HasReadOnlyDictionary>("{\"foo\":{'key':'value'}}");
+            Assert.IsNotNull(actual);
+        }
+
+        public sealed class HasReadOnlyDictionary
+        {
+            [JsonProperty("foo")]
+            public IReadOnlyDictionary<string, string> Foo { get; } = new ReadOnlyDictionary<string, string>(new Dictionary<string, string>());
+
+            [JsonConstructor]
+            public HasReadOnlyDictionary([JsonProperty("bar")] int bar)
+            {
+
+            }
+        }
+#endif
+
+        public sealed class HasReadOnlyEnumerableObject
+        {
+            [JsonProperty("foo")]
+            public EnumerableWithConverter Foo { get; } = new EnumerableWithConverter();
+
+            [JsonConstructor]
+            public HasReadOnlyEnumerableObject([JsonProperty("bar")] int bar)
+            {
+
+            }
+        }
+
+        public sealed class HasReadOnlyEnumerableObjectAndDefaultConstructor
+        {
+            [JsonProperty("foo")]
+            public EnumerableWithConverter Foo { get; } = new EnumerableWithConverter();
+
+            [JsonConstructor]
+            public HasReadOnlyEnumerableObjectAndDefaultConstructor()
+            {
+
+            }
+        }
+
+        public sealed class AcceptsEnumerableObjectToConstructor
+        {
+            [JsonConstructor]
+            public AcceptsEnumerableObjectToConstructor
+            (
+                [JsonProperty("foo")] EnumerableWithConverter foo,
+                [JsonProperty("bar")] int bar
+            )
+            {
+
+            }
+        }
+
+        public sealed class HasEnumerableObject
+        {
+            [JsonProperty("foo")]
+            public EnumerableWithConverter Foo { get; set; } = new EnumerableWithConverter();
+
+            [JsonConstructor]
+            public HasEnumerableObject([JsonProperty("bar")] int bar)
+            {
+
+            }
+        }
+
+        [JsonConverter(typeof(Converter))]
+        public sealed class EnumerableWithConverter : IEnumerable<int>
+        {
+            public sealed class Converter : JsonConverter
+            {
+                public override bool CanConvert(Type objectType)
+                    => objectType == typeof(Foo);
+
+                public override object ReadJson
+                    (JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+                {
+                    reader.Skip();
+                    return new EnumerableWithConverter();
+                }
+
+                public override void WriteJson
+                    (JsonWriter writer, object value, JsonSerializer serializer)
+                {
+                    writer.WriteStartObject();
+                    writer.WriteEndObject();
+                }
+            }
+
+            public IEnumerator<int> GetEnumerator()
+            {
+                yield break;
+            }
+
+            IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        }
+
+        [Test]
+        public void ShouldNotRequireIgnoredPropertiesWithItemsRequired()
+        {
+            string json = @"{
+  ""exp"": 1483228800,
+  ""active"": true
+}";
+            ItemsRequiredObjectWithIgnoredProperty value = JsonConvert.DeserializeObject<ItemsRequiredObjectWithIgnoredProperty>(json);
+            Assert.IsNotNull(value);
+            Assert.AreEqual(value.Expiration, new DateTime(2017, 1, 1, 0, 0, 0, DateTimeKind.Utc));
+            Assert.AreEqual(value.Active, true);
+        }
+
+        [JsonObject(ItemRequired = Required.Always)]
+        public sealed class ItemsRequiredObjectWithIgnoredProperty
+        {
+            private static readonly DateTime s_unixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
+            [JsonProperty("exp")]
+            private int _expiration
+            {
+                get
+                {
+                    return (int)((Expiration - s_unixEpoch).TotalSeconds);
+                }
+                set
+                {
+                    Expiration = s_unixEpoch.AddSeconds(value);
+                }
+            }
+
+            public bool Active { get; set; }
+
+            [JsonIgnore]
+            public DateTime Expiration { get; set; }
         }
     }
 }

@@ -30,7 +30,7 @@ using System.IO;
 #if NET20
 using Newtonsoft.Json.Utilities.LinqBridge;
 #endif
-#if !(NET20 || NET35 || PORTABLE) || NETSTANDARD1_1
+#if !(NET20 || NET35 || PORTABLE) || NETSTANDARD1_3
 using System.Numerics;
 #endif
 using System.Text;
@@ -353,7 +353,7 @@ namespace Newtonsoft.Json.Tests
             Assert.IsNotNull(validationEventArgs);
         }
 
-#if !(NET20 || NET35 || PORTABLE || PORTABLE40) || NETSTANDARD1_1
+#if !(NET20 || NET35 || PORTABLE || PORTABLE40) || NETSTANDARD1_3
         [Test]
         public void IntegerGreaterThanMaximumValue_BigInteger()
         {
@@ -606,7 +606,7 @@ namespace Newtonsoft.Json.Tests
             Assert.IsNotNull(validationEventArgs);
         }
 
-#if !(NET20 || NET35 || PORTABLE || PORTABLE40) || NETSTANDARD1_1
+#if !(NET20 || NET35 || PORTABLE || PORTABLE40) || NETSTANDARD1_3
         [Test]
         public void BigIntegerDivisibleBy_Success()
         {
@@ -1746,6 +1746,17 @@ namespace Newtonsoft.Json.Tests
             reader.ReadAsInt32();
             Assert.AreEqual(JsonToken.None, reader.TokenType);
             Assert.AreEqual(null, validationEventArgs);
+        }
+
+        [Test]
+        public void CloseAlsoClosesUnderlyingReader()
+        {
+            var underlyingReader = new TestObjects.JsonReaderStubWithIsClosed();
+            var validatingReader = new JsonValidatingReader(underlyingReader) { CloseInput = true };
+
+            validatingReader.Close();
+
+            Assert.IsTrue(underlyingReader.IsClosed);
         }
     }
 }

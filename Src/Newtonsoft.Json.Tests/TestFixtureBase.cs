@@ -45,8 +45,12 @@ using NUnit.Framework;
 #endif
 using Newtonsoft.Json.Utilities;
 using System.Collections;
+#if !(NET20 || NET35 || NET40 || PORTABLE40)
+using System.Threading.Tasks;
+#endif
 #if NET20
 using Newtonsoft.Json.Utilities.LinqBridge;
+using Action = Newtonsoft.Json.Serialization.Action;
 #else
 using System.Linq;
 
@@ -135,7 +139,9 @@ namespace Newtonsoft.Json.Tests
         public static void Fail(string message = null, params object[] args)
         {
             if (message != null)
+            {
                 message = message.FormatWith(CultureInfo.InvariantCulture, args);
+            }
 
             XAssert.True(false, message);
         }
@@ -204,6 +210,15 @@ namespace Newtonsoft.Json.Tests
         }
 #endif
 
+        public static string ResolvePath(string path)
+        {
+#if !DNXCORE50
+            return Path.Combine(TestContext.CurrentContext.TestDirectory, path);
+#else
+            return path;
+#endif
+        }
+
         protected string GetOffset(DateTime d, DateFormatHandling dateFormatHandling)
         {
             char[] chars = new char[8];
@@ -228,7 +243,7 @@ namespace Newtonsoft.Json.Tests
             return hex;
         }
 
-        protected byte[] HexToBytes(string hex)
+        public static byte[] HexToBytes(string hex)
         {
             string fixedHex = hex.Replace("-", string.Empty);
 
@@ -310,14 +325,16 @@ namespace Newtonsoft.Json.Tests
             Assert.Contains(value, collection, message);
 #else
             if (!collection.Cast<object>().Any(i => i.Equals(value)))
+            {
                 throw new Exception(message ?? "Value not found in collection.");
+            }
 #endif
         }
     }
 
     public static class StringAssert
     {
-        private readonly static Regex Regex = new Regex(@"\r\n|\n\r|\n|\r", RegexOptions.CultureInvariant);
+        private static readonly Regex Regex = new Regex(@"\r\n|\n\r|\n|\r", RegexOptions.CultureInvariant);
 
         public static void AreEqual(string expected, string actual)
         {
@@ -379,5 +396,40 @@ namespace Newtonsoft.Json.Tests
                 throw new Exception(string.Format("Exception of type {0} expected; got exception of type {1}.", typeof(TException).Name, ex.GetType().Name), ex);
             }
         }
+
+#if !(NET20 || NET35 || NET40 || PORTABLE40)
+        public static async Task<TException> ThrowsAsync<TException>(Func<Task> action, params string[] possibleMessages)
+            where TException : Exception
+        {
+            try
+            {
+                await action();
+
+                Assert.Fail("Exception of type {0} expected. No exception thrown.", typeof(TException).Name);
+                return null;
+            }
+            catch (TException ex)
+            {
+                if (possibleMessages == null || possibleMessages.Length == 0)
+                {
+                    return ex;
+                }
+                foreach (string possibleMessage in possibleMessages)
+                {
+                    if (StringAssert.Equals(possibleMessage, ex.Message))
+                    {
+                        return ex;
+                    }
+                }
+
+                throw new Exception("Unexpected exception message." + Environment.NewLine + "Expected one of: " + string.Join(Environment.NewLine, possibleMessages) + Environment.NewLine + "Got: " + ex.Message + Environment.NewLine + Environment.NewLine + ex);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception(string.Format("Exception of type {0} expected; got exception of type {1}.", typeof(TException).Name, ex.GetType().Name), ex);
+            }
+        }
+#endif
+
     }
 }

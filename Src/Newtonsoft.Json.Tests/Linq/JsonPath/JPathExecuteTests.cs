@@ -26,7 +26,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text;
-#if !(PORTABLE || PORTABLE40 || NET35 || NET20) || NETSTANDARD1_1
+#if !(PORTABLE || PORTABLE40 || NET35 || NET20) || NETSTANDARD1_3
 using System.Numerics;
 #endif
 using Newtonsoft.Json.Linq.JsonPath;
@@ -51,6 +51,206 @@ namespace Newtonsoft.Json.Tests.Linq.JsonPath
     [TestFixture]
     public class JPathExecuteTests : TestFixtureBase
     {
+        [Test]
+        public void GreaterThanWithIntegerParameterAndStringValue()
+        {
+            string json = @"{
+  ""persons"": [
+    {
+      ""name""  : ""John"",
+      ""age"": ""26""
+    },
+    {
+      ""name""  : ""Jane"",
+      ""age"": ""2""
+    }
+  ]
+}";
+
+            JObject models = JObject.Parse(json);
+
+            var results = models.SelectTokens("$.persons[?(@.age > 3)]").ToList();
+
+            Assert.AreEqual(1, results.Count);
+        }
+
+        [Test]
+        public void GreaterThanWithStringParameterAndIntegerValue()
+        {
+            string json = @"{
+  ""persons"": [
+    {
+      ""name""  : ""John"",
+      ""age"": 26
+    },
+    {
+      ""name""  : ""Jane"",
+      ""age"": 2
+    }
+  ]
+}";
+
+            JObject models = JObject.Parse(json);
+
+            var results = models.SelectTokens("$.persons[?(@.age > '3')]").ToList();
+
+            Assert.AreEqual(1, results.Count);
+        }
+
+        [Test]
+        public void RecursiveWildcard()
+        {
+            string json = @"{
+    ""a"": [
+        {
+            ""id"": 1
+        }
+    ],
+    ""b"": [
+        {
+            ""id"": 2
+        },
+        {
+            ""id"": 3,
+            ""c"": {
+                ""id"": 4
+            }
+        }
+    ],
+    ""d"": [
+        {
+            ""id"": 5
+        }
+    ]
+}";
+
+            JObject models = JObject.Parse(json);
+
+            var results = models.SelectTokens("$.b..*.id").ToList();
+
+            Assert.AreEqual(3, results.Count);
+            Assert.AreEqual(2, (int)results[0]);
+            Assert.AreEqual(3, (int)results[1]);
+            Assert.AreEqual(4, (int)results[2]);
+        }
+
+        [Test]
+        public void ScanFilter()
+        {
+            string json = @"{
+  ""elements"": [
+    {
+      ""id"": ""A"",
+      ""children"": [
+        {
+          ""id"": ""AA"",
+          ""children"": [
+            {
+              ""id"": ""AAA""
+            },
+            {
+              ""id"": ""AAB""
+            }
+          ]
+        },
+        {
+          ""id"": ""AB""
+        }
+      ]
+    },
+    {
+      ""id"": ""B"",
+      ""children"": []
+    }
+  ]
+}";
+
+            JObject models = JObject.Parse(json);
+
+            var results = models.SelectTokens("$.elements..[?(@.id=='AAA')]").ToList();
+
+            Assert.AreEqual(1, results.Count);
+            Assert.AreEqual(models["elements"][0]["children"][0]["children"][0], results[0]);
+        }
+
+        [Test]
+        public void FilterTrue()
+        {
+            string json = @"{
+  ""elements"": [
+    {
+      ""id"": ""A"",
+      ""children"": [
+        {
+          ""id"": ""AA"",
+          ""children"": [
+            {
+              ""id"": ""AAA""
+            },
+            {
+              ""id"": ""AAB""
+            }
+          ]
+        },
+        {
+          ""id"": ""AB""
+        }
+      ]
+    },
+    {
+      ""id"": ""B"",
+      ""children"": []
+    }
+  ]
+}";
+
+            JObject models = JObject.Parse(json);
+
+            var results = models.SelectTokens("$.elements[?(true)]").ToList();
+
+            Assert.AreEqual(2, results.Count);
+            Assert.AreEqual(results[0], models["elements"][0]);
+            Assert.AreEqual(results[1], models["elements"][1]);
+        }
+
+        [Test]
+        public void ScanFilterTrue()
+        {
+            string json = @"{
+  ""elements"": [
+    {
+      ""id"": ""A"",
+      ""children"": [
+        {
+          ""id"": ""AA"",
+          ""children"": [
+            {
+              ""id"": ""AAA""
+            },
+            {
+              ""id"": ""AAB""
+            }
+          ]
+        },
+        {
+          ""id"": ""AB""
+        }
+      ]
+    },
+    {
+      ""id"": ""B"",
+      ""children"": []
+    }
+  ]
+}";
+
+            JObject models = JObject.Parse(json);
+
+            var results = models.SelectTokens("$.elements..[?(true)]").ToList();
+
+            Assert.AreEqual(25, results.Count);
+        }
+
         [Test]
         public void ScanQuoted()
         {
@@ -723,7 +923,22 @@ namespace Newtonsoft.Json.Tests.Linq.JsonPath
             Assert.IsTrue(JToken.DeepEquals(new JObject(new JProperty("hi", 3)), t[1]));
         }
 
-#if !(PORTABLE || DNXCORE50 || PORTABLE40 || NET35 || NET20) || NETSTANDARD1_1
+        [Test]
+        public void LesserQuery_ValueFirst()
+        {
+            JArray a = new JArray(
+                new JObject(new JProperty("hi", 1)),
+                new JObject(new JProperty("hi", 2)),
+                new JObject(new JProperty("hi", 3)));
+
+            IList<JToken> t = a.SelectTokens("[ ?( 1 < @.hi ) ]").ToList();
+            Assert.IsNotNull(t);
+            Assert.AreEqual(2, t.Count);
+            Assert.IsTrue(JToken.DeepEquals(new JObject(new JProperty("hi", 2)), t[0]));
+            Assert.IsTrue(JToken.DeepEquals(new JObject(new JProperty("hi", 3)), t[1]));
+        }
+
+#if !(PORTABLE || DNXCORE50 || PORTABLE40 || NET35 || NET20) || NETSTANDARD1_3
         [Test]
         public void GreaterQueryBigInteger()
         {
@@ -809,6 +1024,79 @@ namespace Newtonsoft.Json.Tests.Linq.JsonPath
 
             JValue v = (JValue)a.SelectToken("[1].Property2[1][0]");
             Assert.AreEqual(1L, v.Value);
+        }
+
+        [Test]
+        public void MultiplePaths()
+        {
+            JArray a = JArray.Parse(@"[
+  {
+    ""price"": 199,
+    ""max_price"": 200
+  },
+  {
+    ""price"": 200,
+    ""max_price"": 200
+  },
+  {
+    ""price"": 201,
+    ""max_price"": 200
+  }
+]");
+
+            var results = a.SelectTokens("[?(@.price > @.max_price)]").ToList();
+            Assert.AreEqual(1, results.Count);
+            Assert.AreEqual(a[2], results[0]);
+        }
+
+        [Test]
+        public void Exists_True()
+        {
+            JArray a = JArray.Parse(@"[
+  {
+    ""price"": 199,
+    ""max_price"": 200
+  },
+  {
+    ""price"": 200,
+    ""max_price"": 200
+  },
+  {
+    ""price"": 201,
+    ""max_price"": 200
+  }
+]");
+
+            var results = a.SelectTokens("[?(true)]").ToList();
+            Assert.AreEqual(3, results.Count);
+            Assert.AreEqual(a[0], results[0]);
+            Assert.AreEqual(a[1], results[1]);
+            Assert.AreEqual(a[2], results[2]);
+        }
+
+        [Test]
+        public void Exists_Null()
+        {
+            JArray a = JArray.Parse(@"[
+  {
+    ""price"": 199,
+    ""max_price"": 200
+  },
+  {
+    ""price"": 200,
+    ""max_price"": 200
+  },
+  {
+    ""price"": 201,
+    ""max_price"": 200
+  }
+]");
+
+            var results = a.SelectTokens("[?(true)]").ToList();
+            Assert.AreEqual(3, results.Count);
+            Assert.AreEqual(a[0], results[0]);
+            Assert.AreEqual(a[1], results[1]);
+            Assert.AreEqual(a[2], results[2]);
         }
 
         [Test]
@@ -1066,11 +1354,85 @@ namespace Newtonsoft.Json.Tests.Linq.JsonPath
 
             JArray a = JArray.Parse(json);
 
-            List<JToken> result = a.SelectTokens("$.[?($.store.bicycle.price < 20)]").ToList();
+            List<JToken> result = a.SelectTokens("$.[?($.[0].store.bicycle.price < 20)]").ToList();
             Assert.AreEqual(1, result.Count);
 
-            result = a.SelectTokens("$.[?($.store.bicycle.price < 10)]").ToList();
+            result = a.SelectTokens("$.[?($.[0].store.bicycle.price < 10)]").ToList();
             Assert.AreEqual(0, result.Count);
+        }
+
+        [Test]
+        public void RootInFilterWithRootObject()
+        {
+            string json = @"{
+                ""store"" : {
+                    ""book"" : [
+                        {
+                            ""category"" : ""reference"",
+                            ""author"" : ""Nigel Rees"",
+                            ""title"" : ""Sayings of the Century"",
+                            ""price"" : 8.95
+                        },
+                        {
+                            ""category"" : ""fiction"",
+                            ""author"" : ""Evelyn Waugh"",
+                            ""title"" : ""Sword of Honour"",
+                            ""price"" : 12.99
+                        },
+                        {
+                            ""category"" : ""fiction"",
+                            ""author"" : ""Herman Melville"",
+                            ""title"" : ""Moby Dick"",
+                            ""isbn"" : ""0-553-21311-3"",
+                            ""price"" : 8.99
+                        },
+                        {
+                            ""category"" : ""fiction"",
+                            ""author"" : ""J. R. R. Tolkien"",
+                            ""title"" : ""The Lord of the Rings"",
+                            ""isbn"" : ""0-395-19395-8"",
+                            ""price"" : 22.99
+                        }
+                    ],
+                    ""bicycle"" : [
+                        {
+                            ""color"" : ""red"",
+                            ""price"" : 19.95
+                        }
+                    ]
+                },
+                ""expensive"" : 10
+            }";
+
+            JObject a = JObject.Parse(json);
+
+            List<JToken> result = a.SelectTokens("$..book[?(@.price <= $['expensive'])]").ToList();
+            Assert.AreEqual(2, result.Count);
+
+            result = a.SelectTokens("$.store..[?(@.price > $.expensive)]").ToList();
+            Assert.AreEqual(3, result.Count);
+        }
+
+        [Test]
+        public void RootInFilterWithInitializers()
+        {
+            JObject rootObject = new JObject
+            {
+                { "referenceDate", new JValue(DateTime.MinValue) },
+                {
+                    "dateObjectsArray",
+                    new JArray()
+                    {
+                        new JObject { { "date", new JValue(DateTime.MinValue) } },
+                        new JObject { { "date", new JValue(DateTime.MaxValue) } },
+                        new JObject { { "date", new JValue(DateTime.Now) } },
+                        new JObject { { "date", new JValue(DateTime.MinValue) } },
+                    }
+                }
+            };
+
+            List<JToken> result = rootObject.SelectTokens("$.dateObjectsArray[?(@.date == $.referenceDate)]").ToList();
+            Assert.AreEqual(2, result.Count);
         }
     }
 }

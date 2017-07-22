@@ -28,7 +28,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using Newtonsoft.Json.Linq;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
+#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_3
 using System.Numerics;
 #endif
 using System.Text;
@@ -62,6 +62,59 @@ namespace Newtonsoft.Json.Tests.JsonTextReaderTests
 #endif
     public class MiscTests : TestFixtureBase
     {
+        [Test]
+        public void ReadWithSupportMultipleContentCommaDelimited()
+        {
+            string json = @"{ 'name': 'Admin' },{ 'name': 'Publisher' },1,null,[],,'string'";
+
+            JsonTextReader reader = new JsonTextReader(new StringReader(json));
+            reader.SupportMultipleContent = true;
+
+            Assert.IsTrue(reader.Read());
+            Assert.AreEqual(JsonToken.StartObject, reader.TokenType);
+
+            Assert.IsTrue(reader.Read());
+            Assert.AreEqual(JsonToken.PropertyName, reader.TokenType);
+
+            Assert.IsTrue(reader.Read());
+            Assert.AreEqual(JsonToken.String, reader.TokenType);
+
+            Assert.IsTrue(reader.Read());
+            Assert.AreEqual(JsonToken.EndObject, reader.TokenType);
+
+            Assert.IsTrue(reader.Read());
+            Assert.AreEqual(JsonToken.StartObject, reader.TokenType);
+
+            Assert.IsTrue(reader.Read());
+            Assert.AreEqual(JsonToken.PropertyName, reader.TokenType);
+
+            Assert.IsTrue(reader.Read());
+            Assert.AreEqual(JsonToken.String, reader.TokenType);
+
+            Assert.IsTrue(reader.Read());
+            Assert.AreEqual(JsonToken.EndObject, reader.TokenType);
+
+            Assert.IsTrue(reader.Read());
+            Assert.AreEqual(JsonToken.Integer, reader.TokenType);
+
+            Assert.IsTrue(reader.Read());
+            Assert.AreEqual(JsonToken.Null, reader.TokenType);
+
+            Assert.IsTrue(reader.Read());
+            Assert.AreEqual(JsonToken.StartArray, reader.TokenType);
+
+            Assert.IsTrue(reader.Read());
+            Assert.AreEqual(JsonToken.EndArray, reader.TokenType);
+
+            Assert.IsTrue(reader.Read());
+            Assert.AreEqual(JsonToken.Undefined, reader.TokenType);
+
+            Assert.IsTrue(reader.Read());
+            Assert.AreEqual(JsonToken.String, reader.TokenType);
+
+            Assert.IsFalse(reader.Read());
+        }
+
         [Test]
         public void LineInfoAndNewLines()
         {
@@ -1028,6 +1081,19 @@ null//comment
             GC.Collect();
             GC.WaitForPendingFinalizers();
             Assert.AreEqual(1, UnmanagedResourceFakingJsonReader.DisposalCalls);
+        }
+
+        [Test]
+        public void InvalidUnicodeSequence()
+        {
+            string json1 = @"{'prop':'\u123!'}";
+
+            JsonTextReader r = new JsonTextReader(new StringReader(json1));
+
+            Assert.IsTrue(r.Read());
+            Assert.IsTrue(r.Read());
+
+            ExceptionAssert.Throws<JsonReaderException>(() => { r.Read(); }, @"Invalid Unicode escape sequence: \u123!. Path 'prop', line 1, position 11.");
         }
     }
 }

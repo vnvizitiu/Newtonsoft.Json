@@ -23,8 +23,9 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 #endregion
 
-#if !PORTABLE40
-#if !(PORTABLE || NET20 || NET35) || NETSTANDARD1_1
+#if (HAVE_XML_DOCUMENT || HAVE_XLINQ)
+
+#if HAVE_BIG_INTEGER
 using System.Numerics;
 #endif
 using System;
@@ -32,15 +33,16 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Xml;
 using Newtonsoft.Json.Serialization;
-#if !(NET20 || PORTABLE40)
+#if HAVE_XLINQ
 using System.Xml.Linq;
 #endif
 using Newtonsoft.Json.Utilities;
+using System.Runtime.CompilerServices;
 
 namespace Newtonsoft.Json.Converters
 {
     #region XmlNodeWrappers
-#if !DOTNET && !PORTABLE && !PORTABLE40
+#if HAVE_XML_DOCUMENT
     internal class XmlDocumentWrapper : XmlNodeWrapper, IXmlDocument
     {
         private readonly XmlDocument _document;
@@ -81,10 +83,12 @@ namespace Newtonsoft.Json.Converters
             return new XmlDeclarationWrapper(_document.CreateXmlDeclaration(version, encoding, standalone));
         }
 
+#if HAVE_XML_DOCUMENT_TYPE
         public IXmlNode CreateXmlDocumentType(string name, string publicId, string systemId, string internalSubset)
         {
             return new XmlDocumentTypeWrapper(_document.CreateDocumentType(name, publicId, systemId, null));
         }
+#endif
 
         public IXmlNode CreateProcessingInstruction(string target, string data)
         {
@@ -187,6 +191,7 @@ namespace Newtonsoft.Json.Converters
         }
     }
 
+#if HAVE_XML_DOCUMENT_TYPE
     internal class XmlDocumentTypeWrapper : XmlNodeWrapper, IXmlDocumentType
     {
         private readonly XmlDocumentType _documentType;
@@ -222,6 +227,7 @@ namespace Newtonsoft.Json.Converters
             get { return "DOCTYPE"; }
         }
     }
+#endif
 
     internal class XmlNodeWrapper : IXmlNode
     {
@@ -257,15 +263,27 @@ namespace Newtonsoft.Json.Converters
                 // cache results to prevent multiple reads which kills perf in large documents
                 if (_childNodes == null)
                 {
-                    _childNodes = new List<IXmlNode>(_node.ChildNodes.Count);
-                    foreach (XmlNode childNode in _node.ChildNodes)
+                    if (!_node.HasChildNodes)
                     {
-                        _childNodes.Add(WrapNode(childNode));
+                        _childNodes = XmlNodeConverter.EmptyChildNodes;
+                    }
+                    else
+                    {
+                        _childNodes = new List<IXmlNode>(_node.ChildNodes.Count);
+                        foreach (XmlNode childNode in _node.ChildNodes)
+                        {
+                            _childNodes.Add(WrapNode(childNode));
+                        }
                     }
                 }
 
                 return _childNodes;
             }
+        }
+
+        protected virtual bool HasChildNodes
+        {
+            get { return _node.HasChildNodes; }
         }
 
         internal static IXmlNode WrapNode(XmlNode node)
@@ -276,8 +294,10 @@ namespace Newtonsoft.Json.Converters
                     return new XmlElementWrapper((XmlElement)node);
                 case XmlNodeType.XmlDeclaration:
                     return new XmlDeclarationWrapper((XmlDeclaration)node);
+#if HAVE_XML_DOCUMENT_TYPE
                 case XmlNodeType.DocumentType:
                     return new XmlDocumentTypeWrapper((XmlDocumentType)node);
+#endif
                 default:
                     return new XmlNodeWrapper(node);
             }
@@ -287,19 +307,21 @@ namespace Newtonsoft.Json.Converters
         {
             get
             {
-                if (_node.Attributes == null)
-                {
-                    return null;
-                }
-
                 // attributes is read multiple times
                 // cache results to prevent multiple reads which kills perf in large documents
                 if (_attributes == null)
                 {
-                    _attributes = new List<IXmlNode>(_node.Attributes.Count);
-                    foreach (XmlAttribute attribute in _node.Attributes)
+                    if (!HasAttributes)
                     {
-                        _attributes.Add(WrapNode(attribute));
+                        _attributes = XmlNodeConverter.EmptyChildNodes;
+                    }
+                    else
+                    {
+                        _attributes = new List<IXmlNode>(_node.Attributes.Count);
+                        foreach (XmlAttribute attribute in _node.Attributes)
+                        {
+                            _attributes.Add(WrapNode(attribute));
+                        }
                     }
                 }
 
@@ -307,13 +329,26 @@ namespace Newtonsoft.Json.Converters
             }
         }
 
+        private bool HasAttributes
+        {
+            get
+            {
+                XmlElement element = _node as XmlElement;
+                if (element != null)
+                {
+                    return element.HasAttributes;
+                }
+
+                return _node.Attributes?.Count > 0;
+            }
+        }
+
         public IXmlNode ParentNode
         {
             get
             {
-                XmlNode node = (_node is XmlAttribute)
-                    ? ((XmlAttribute)_node).OwnerElement
-                    : _node.ParentNode;
+                XmlAttribute attribute = _node as XmlAttribute;
+                XmlNode node = attribute != null ? attribute.OwnerElement : _node.ParentNode;
 
                 if (node == null)
                 {
@@ -346,9 +381,9 @@ namespace Newtonsoft.Json.Converters
         }
     }
 #endif
-    #endregion
+#endregion
 
-    #region Interfaces
+#region Interfaces
     internal interface IXmlDocument : IXmlNode
     {
         IXmlNode CreateComment(string text);
@@ -357,7 +392,9 @@ namespace Newtonsoft.Json.Converters
         IXmlNode CreateWhitespace(string text);
         IXmlNode CreateSignificantWhitespace(string text);
         IXmlNode CreateXmlDeclaration(string version, string encoding, string standalone);
+#if HAVE_XML_DOCUMENT_TYPE
         IXmlNode CreateXmlDocumentType(string name, string publicId, string systemId, string internalSubset);
+#endif
         IXmlNode CreateProcessingInstruction(string target, string data);
         IXmlElement CreateElement(string elementName);
         IXmlElement CreateElement(string qualifiedName, string namespaceUri);
@@ -401,13 +438,13 @@ namespace Newtonsoft.Json.Converters
         string NamespaceUri { get; }
         object WrappedNode { get; }
     }
-    #endregion
+#endregion
 
-    #region XNodeWrappers
-#if !NET20
+#region XNodeWrappers
+#if HAVE_XLINQ
     internal class XDeclarationWrapper : XObjectWrapper, IXmlDeclaration
     {
-        internal XDeclaration Declaration { get; private set; }
+        internal XDeclaration Declaration { get; }
 
         public XDeclarationWrapper(XDeclaration declaration)
             : base(null)
@@ -491,13 +528,25 @@ namespace Newtonsoft.Json.Converters
             get
             {
                 List<IXmlNode> childNodes = base.ChildNodes;
-
-                if (Document.Declaration != null && childNodes[0].NodeType != XmlNodeType.XmlDeclaration)
+                if (Document.Declaration != null && (childNodes.Count == 0 || childNodes[0].NodeType != XmlNodeType.XmlDeclaration))
                 {
                     childNodes.Insert(0, new XDeclarationWrapper(Document.Declaration));
                 }
 
                 return childNodes;
+            }
+        }
+
+        protected override bool HasChildNodes
+        {
+            get
+            {
+                if (base.HasChildNodes)
+                {
+                    return true;
+                }
+
+                return Document.Declaration != null;
             }
         }
 
@@ -701,14 +750,31 @@ namespace Newtonsoft.Json.Converters
                 // cache results to prevent multiple reads which kills perf in large documents
                 if (_childNodes == null)
                 {
-                    _childNodes = new List<IXmlNode>();
-                    foreach (XNode node in Container.Nodes())
+                    if (!HasChildNodes)
                     {
-                        _childNodes.Add(WrapNode(node));
+                        _childNodes = XmlNodeConverter.EmptyChildNodes;
+                    }
+                    else
+                    {
+                        _childNodes = new List<IXmlNode>();
+                        foreach (XNode node in Container.Nodes())
+                        {
+                            _childNodes.Add(WrapNode(node));
+                        }
                     }
                 }
 
                 return _childNodes;
+            }
+        }
+
+        protected virtual bool HasChildNodes
+        {
+            get
+            {
+                // use last node for performance
+                // container linked list starts with lastnode
+                return Container.LastNode != null;
             }
         }
 
@@ -727,42 +793,55 @@ namespace Newtonsoft.Json.Converters
 
         internal static IXmlNode WrapNode(XObject node)
         {
-            if (node is XDocument)
+            XDocument document = node as XDocument;
+            if (document != null)
             {
-                return new XDocumentWrapper((XDocument)node);
+                return new XDocumentWrapper(document);
             }
-            else if (node is XElement)
+
+            XElement element = node as XElement;
+            if (element != null)
             {
-                return new XElementWrapper((XElement)node);
+                return new XElementWrapper(element);
             }
-            else if (node is XContainer)
+
+            XContainer container = node as XContainer;
+            if (container != null)
             {
-                return new XContainerWrapper((XContainer)node);
+                return new XContainerWrapper(container);
             }
-            else if (node is XProcessingInstruction)
+
+            XProcessingInstruction pi = node as XProcessingInstruction;
+            if (pi != null)
             {
-                return new XProcessingInstructionWrapper((XProcessingInstruction)node);
+                return new XProcessingInstructionWrapper(pi);
             }
-            else if (node is XText)
+
+            XText text = node as XText;
+            if (text != null)
             {
-                return new XTextWrapper((XText)node);
+                return new XTextWrapper(text);
             }
-            else if (node is XComment)
+
+            XComment comment = node as XComment;
+            if (comment != null)
             {
-                return new XCommentWrapper((XComment)node);
+                return new XCommentWrapper(comment);
             }
-            else if (node is XAttribute)
+
+            XAttribute attribute = node as XAttribute;
+            if (attribute != null)
             {
-                return new XAttributeWrapper((XAttribute)node);
+                return new XAttributeWrapper(attribute);
             }
-            else if (node is XDocumentType)
+
+            XDocumentType type = node as XDocumentType;
+            if (type != null)
             {
-                return new XDocumentTypeWrapper((XDocumentType)node);
+                return new XDocumentTypeWrapper(type);
             }
-            else
-            {
-                return new XObjectWrapper(node);
-            }
+
+            return new XObjectWrapper(node);
         }
 
         public override IXmlNode AppendChild(IXmlNode newChild)
@@ -776,7 +855,6 @@ namespace Newtonsoft.Json.Converters
 
     internal class XObjectWrapper : IXmlNode
     {
-        private static readonly List<IXmlNode> EmptyChildNodes = new List<IXmlNode>();
         private readonly XObject _xmlObject;
 
         public XObjectWrapper(XObject xmlObject)
@@ -801,12 +879,12 @@ namespace Newtonsoft.Json.Converters
 
         public virtual List<IXmlNode> ChildNodes
         {
-            get { return EmptyChildNodes; }
+            get { return XmlNodeConverter.EmptyChildNodes; }
         }
 
         public virtual List<IXmlNode> Attributes
         {
-            get { return null; }
+            get { return XmlNodeConverter.EmptyChildNodes; }
         }
 
         public virtual IXmlNode ParentNode
@@ -902,38 +980,59 @@ namespace Newtonsoft.Json.Converters
                 // cache results to prevent multiple reads which kills perf in large documents
                 if (_attributes == null)
                 {
-                    _attributes = new List<IXmlNode>();
-                    foreach (XAttribute attribute in Element.Attributes())
+                    if (!Element.HasAttributes && !HasImplicitNamespaceAttribute(NamespaceUri))
                     {
-                        _attributes.Add(new XAttributeWrapper(attribute));
+                        _attributes = XmlNodeConverter.EmptyChildNodes;
                     }
-
-                    // ensure elements created with a namespace but no namespace attribute are converted correctly
-                    // e.g. new XElement("{http://example.com}MyElement");
-                    string namespaceUri = NamespaceUri;
-                    if (!string.IsNullOrEmpty(namespaceUri) && namespaceUri != ParentNode?.NamespaceUri)
+                    else
                     {
-                        if (string.IsNullOrEmpty(GetPrefixOfNamespace(namespaceUri)))
+                        _attributes = new List<IXmlNode>();
+                        foreach (XAttribute attribute in Element.Attributes())
                         {
-                            bool namespaceDeclared = false;
-                            foreach (IXmlNode attribute in _attributes)
-                            {
-                                if (attribute.LocalName == "xmlns" && string.IsNullOrEmpty(attribute.NamespaceUri) && attribute.Value == namespaceUri)
-                                {
-                                    namespaceDeclared = true;
-                                }
-                            }
+                            _attributes.Add(new XAttributeWrapper(attribute));
+                        }
 
-                            if (!namespaceDeclared)
-                            {
-                                _attributes.Insert(0, new XAttributeWrapper(new XAttribute("xmlns", namespaceUri)));
-                            }
+                        // ensure elements created with a namespace but no namespace attribute are converted correctly
+                        // e.g. new XElement("{http://example.com}MyElement");
+                        string namespaceUri = NamespaceUri;
+                        if (HasImplicitNamespaceAttribute(namespaceUri))
+                        {
+                            _attributes.Insert(0, new XAttributeWrapper(new XAttribute("xmlns", namespaceUri)));
                         }
                     }
                 }
 
                 return _attributes;
             }
+        }
+
+        private bool HasImplicitNamespaceAttribute(string namespaceUri)
+        {
+            if (!string.IsNullOrEmpty(namespaceUri) && namespaceUri != ParentNode?.NamespaceUri)
+            {
+                if (string.IsNullOrEmpty(GetPrefixOfNamespace(namespaceUri)))
+                {
+                    bool namespaceDeclared = false;
+
+                    if (Element.HasAttributes)
+                    {
+                        foreach (XAttribute attribute in Element.Attributes())
+                        {
+                            if (attribute.Name.LocalName == "xmlns" && string.IsNullOrEmpty(attribute.Name.NamespaceName) && attribute.Value == namespaceUri)
+                            {
+                                namespaceDeclared = true;
+                            }
+                        }
+                    }
+
+                    if (!namespaceDeclared)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
         }
 
         public override IXmlNode AppendChild(IXmlNode newChild)
@@ -970,13 +1069,15 @@ namespace Newtonsoft.Json.Converters
         }
     }
 #endif
-    #endregion
+#endregion
 
     /// <summary>
     /// Converts XML to and from JSON.
     /// </summary>
     public class XmlNodeConverter : JsonConverter
     {
+        internal static readonly List<IXmlNode> EmptyChildNodes = new List<IXmlNode>();
+
         private const string TextName = "#text";
         private const string CommentName = "#comment";
         private const string CDataName = "#cdata-section";
@@ -986,16 +1087,16 @@ namespace Newtonsoft.Json.Converters
         private const string JsonNamespaceUri = "http://james.newtonking.com/projects/json";
 
         /// <summary>
-        /// Gets or sets the name of the root element to insert when deserializing to XML if the JSON structure has produces multiple root elements.
+        /// Gets or sets the name of the root element to insert when deserializing to XML if the JSON structure has produced multiple root elements.
         /// </summary>
-        /// <value>The name of the deserialize root element.</value>
+        /// <value>The name of the deserialized root element.</value>
         public string DeserializeRootElementName { get; set; }
 
         /// <summary>
         /// Gets or sets a flag to indicate whether to write the Json.NET array attribute.
         /// This attribute helps preserve arrays when converting the written XML back to JSON.
         /// </summary>
-        /// <value><c>true</c> if the array attibute is written to the XML; otherwise, <c>false</c>.</value>
+        /// <value><c>true</c> if the array attribute is written to the XML; otherwise, <c>false</c>.</value>
         public bool WriteArrayAttribute { get; set; }
 
         /// <summary>
@@ -1004,7 +1105,7 @@ namespace Newtonsoft.Json.Converters
         /// <value><c>true</c> if the JSON root object is omitted; otherwise, <c>false</c>.</value>
         public bool OmitRootObject { get; set; }
 
-        #region Writing
+#region Writing
         /// <summary>
         /// Writes the JSON representation of the object.
         /// </summary>
@@ -1033,16 +1134,18 @@ namespace Newtonsoft.Json.Converters
 
         private IXmlNode WrapXml(object value)
         {
-#if !NET20
-            if (value is XObject)
+#if HAVE_XLINQ
+            XObject xObject = value as XObject;
+            if (xObject != null)
             {
-                return XContainerWrapper.WrapNode((XObject)value);
+                return XContainerWrapper.WrapNode(xObject);
             }
 #endif
-#if !(DOTNET || PORTABLE)
-            if (value is XmlNode)
+#if HAVE_XML_DOCUMENT
+            XmlNode node = value as XmlNode;
+            if (node != null)
             {
-                return XmlNodeWrapper.WrapNode((XmlNode)value);
+                return XmlNodeWrapper.WrapNode(node);
             }
 #endif
 
@@ -1146,14 +1249,11 @@ namespace Newtonsoft.Json.Converters
 
         private bool IsArray(IXmlNode node)
         {
-            if (node.Attributes != null)
+            foreach (IXmlNode attribute in node.Attributes)
             {
-                foreach (IXmlNode attribute in node.Attributes)
+                if (attribute.LocalName == "Array" && attribute.NamespaceUri == JsonNamespaceUri)
                 {
-                    if (attribute.LocalName == "Array" && attribute.NamespaceUri == JsonNamespaceUri)
-                    {
-                        return XmlConvert.ToBoolean(attribute.Value);
-                    }
+                    return XmlConvert.ToBoolean(attribute.Value);
                 }
             }
 
@@ -1162,62 +1262,167 @@ namespace Newtonsoft.Json.Converters
 
         private void SerializeGroupedNodes(JsonWriter writer, IXmlNode node, XmlNamespaceManager manager, bool writePropertyName)
         {
-            // group nodes together by name
-            Dictionary<string, List<IXmlNode>> nodesGroupedByName = new Dictionary<string, List<IXmlNode>>();
-
-            for (int i = 0; i < node.ChildNodes.Count; i++)
+            switch (node.ChildNodes.Count)
             {
-                IXmlNode childNode = node.ChildNodes[i];
-                string nodeName = GetPropertyName(childNode, manager);
-
-                List<IXmlNode> nodes;
-                if (!nodesGroupedByName.TryGetValue(nodeName, out nodes))
+                case 0:
                 {
-                    nodes = new List<IXmlNode>();
-                    nodesGroupedByName.Add(nodeName, nodes);
+                    // nothing to serialize
+                    break;
                 }
+                case 1:
+                {
+                    // avoid grouping when there is only one node
+                    string nodeName = GetPropertyName(node.ChildNodes[0], manager);
+                    WriteGroupedNodes(writer, manager, writePropertyName, node.ChildNodes, nodeName);
+                    break;
+                }
+                default:
+                {
+                    // check whether nodes have the same name
+                    // if they don't then group into dictionary together by name
 
-                nodes.Add(childNode);
+                    // value of dictionary will be a single IXmlNode when there is one for a name,
+                    // or a List<IXmlNode> when there are multiple
+                    Dictionary<string, object> nodesGroupedByName = null;
+
+                    string nodeName = null;
+
+                    for (int i = 0; i < node.ChildNodes.Count; i++)
+                    {
+                        IXmlNode childNode = node.ChildNodes[i];
+                        string currentNodeName = GetPropertyName(childNode, manager);
+
+                        if (nodesGroupedByName == null)
+                        {
+                            if (nodeName == null)
+                            {
+                                nodeName = currentNodeName;
+                            }
+                            else if (currentNodeName == nodeName)
+                            {
+                                // current node name matches others
+                            }
+                            else
+                            {
+                                nodesGroupedByName = new Dictionary<string, object>();
+                                if (i > 1)
+                                {
+                                    List<IXmlNode> nodes = new List<IXmlNode>(i);
+                                    for (int j = 0; j < i; j++)
+                                    {
+                                        nodes.Add(node.ChildNodes[j]);
+                                    }
+                                    nodesGroupedByName.Add(nodeName, nodes);
+                                }
+                                else
+                                {
+                                    nodesGroupedByName.Add(nodeName, node.ChildNodes[0]);
+                                }
+                                nodesGroupedByName.Add(currentNodeName, childNode);
+                            }
+                        }
+                        else
+                        {
+                            object value;
+                            if (!nodesGroupedByName.TryGetValue(currentNodeName, out value))
+                            {
+                                nodesGroupedByName.Add(currentNodeName, childNode);
+                            }
+                            else
+                            {
+                                List<IXmlNode> nodes = value as List<IXmlNode>;
+                                if (nodes == null)
+                                {
+                                    nodes = new List<IXmlNode> {(IXmlNode)value};
+                                    nodesGroupedByName[currentNodeName] = nodes;
+                                }
+
+                                nodes.Add(childNode);
+                            }
+                        }
+                    }
+
+                    if (nodesGroupedByName == null)
+                    {
+                        WriteGroupedNodes(writer, manager, writePropertyName, node.ChildNodes, nodeName);
+                    }
+                    else
+                    {
+                        // loop through grouped nodes. write single name instances as normal,
+                        // write multiple names together in an array
+                        foreach (KeyValuePair<string, object> nodeNameGroup in nodesGroupedByName)
+                        {
+                            List<IXmlNode> nodes = nodeNameGroup.Value as List<IXmlNode>;
+                            if (nodes != null)
+                            {
+                                WriteGroupedNodes(writer, manager, writePropertyName, nodes, nodeNameGroup.Key);
+                            }
+                            else
+                            {
+                                WriteGroupedNodes(writer, manager, writePropertyName, (IXmlNode)nodeNameGroup.Value, nodeNameGroup.Key);
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        private void WriteGroupedNodes(JsonWriter writer, XmlNamespaceManager manager, bool writePropertyName, List<IXmlNode> groupedNodes, string elementNames)
+        {
+            bool writeArray;
+
+            if (groupedNodes.Count == 1)
+            {
+                writeArray = IsArray(groupedNodes[0]);
+            }
+            else
+            {
+                writeArray = true;
             }
 
-            // loop through grouped nodes. write single name instances as normal,
-            // write multiple names together in an array
-            foreach (KeyValuePair<string, List<IXmlNode>> nodeNameGroup in nodesGroupedByName)
+            if (!writeArray)
             {
-                List<IXmlNode> groupedNodes = nodeNameGroup.Value;
-                bool writeArray;
-
-                if (groupedNodes.Count == 1)
+                SerializeNode(writer, groupedNodes[0], manager, writePropertyName);
+            }
+            else
+            {
+                if (writePropertyName)
                 {
-                    writeArray = IsArray(groupedNodes[0]);
-                }
-                else
-                {
-                    writeArray = true;
+                    writer.WritePropertyName(elementNames);
                 }
 
-                if (!writeArray)
+                writer.WriteStartArray();
+
+                for (int i = 0; i < groupedNodes.Count; i++)
                 {
-                    SerializeNode(writer, groupedNodes[0], manager, writePropertyName);
+                    SerializeNode(writer, groupedNodes[i], manager, false);
                 }
-                else
+
+                writer.WriteEndArray();
+            }
+        }
+
+        private void WriteGroupedNodes(JsonWriter writer, XmlNamespaceManager manager, bool writePropertyName, IXmlNode node, string elementNames)
+        {
+            bool writeArray = IsArray(node);
+
+            if (!writeArray)
+            {
+                SerializeNode(writer, node, manager, writePropertyName);
+            }
+            else
+            {
+                if (writePropertyName)
                 {
-                    string elementNames = nodeNameGroup.Key;
-
-                    if (writePropertyName)
-                    {
-                        writer.WritePropertyName(elementNames);
-                    }
-
-                    writer.WriteStartArray();
-
-                    for (int i = 0; i < groupedNodes.Count; i++)
-                    {
-                        SerializeNode(writer, groupedNodes[i], manager, false);
-                    }
-
-                    writer.WriteEndArray();
+                    writer.WritePropertyName(elementNames);
                 }
+
+                writer.WriteStartArray();
+
+                SerializeNode(writer, node, manager, false);
+
+                writer.WriteEndArray();
             }
         }
 
@@ -1262,7 +1467,7 @@ namespace Newtonsoft.Json.Converters
                             // write elements with a single text child as a name value pair
                             writer.WriteValue(node.ChildNodes[0].Value);
                         }
-                        else if (node.ChildNodes.Count == 0 && CollectionUtils.IsNullOrEmpty(node.Attributes))
+                        else if (node.ChildNodes.Count == 0 && node.Attributes.Count == 0)
                         {
                             IXmlElement element = (IXmlElement)node;
 
@@ -1392,9 +1597,9 @@ namespace Newtonsoft.Json.Converters
             }
             return true;
         }
-        #endregion
+#endregion
 
-        #region Reading
+#region Reading
         /// <summary>
         /// Reads the JSON representation of the object.
         /// </summary>
@@ -1405,21 +1610,30 @@ namespace Newtonsoft.Json.Converters
         /// <returns>The object value.</returns>
         public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
         {
-            if (reader.TokenType == JsonToken.Null)
+            switch (reader.TokenType)
             {
-                return null;
+                case JsonToken.Null:
+                    return null;
+                case JsonToken.StartObject:
+                    break;
+                default:
+                    throw JsonSerializationException.Create(reader, "XmlNodeConverter can only convert JSON that begins with an object.");
             }
 
             XmlNamespaceManager manager = new XmlNamespaceManager(new NameTable());
             IXmlDocument document = null;
             IXmlNode rootNode = null;
 
-#if !NET20
+#if HAVE_XLINQ
             if (typeof(XObject).IsAssignableFrom(objectType))
             {
-                if (objectType != typeof(XDocument) && objectType != typeof(XElement))
+                if (objectType != typeof(XContainer)
+                    && objectType != typeof(XDocument)
+                    && objectType != typeof(XElement)
+                    && objectType != typeof(XNode)
+                    && objectType != typeof(XObject))
                 {
-                    throw new JsonSerializationException("XmlNodeConverter only supports deserializing XDocument or XElement.");
+                    throw JsonSerializationException.Create(reader, "XmlNodeConverter only supports deserializing XDocument, XElement, XContainer, XNode or XObject.");
                 }
 
                 XDocument d = new XDocument();
@@ -1427,17 +1641,21 @@ namespace Newtonsoft.Json.Converters
                 rootNode = document;
             }
 #endif
-#if !(DOTNET || PORTABLE)
+#if HAVE_XML_DOCUMENT
             if (typeof(XmlNode).IsAssignableFrom(objectType))
             {
-                if (objectType != typeof(XmlDocument))
+                if (objectType != typeof(XmlDocument)
+                    && objectType != typeof(XmlElement)
+                    && objectType != typeof(XmlNode))
                 {
-                    throw new JsonSerializationException("XmlNodeConverter only supports deserializing XmlDocuments");
+                    throw JsonSerializationException.Create(reader, "XmlNodeConverter only supports deserializing XmlDocument, XmlElement or XmlNode.");
                 }
 
                 XmlDocument d = new XmlDocument();
+#if HAVE_XML_DOCUMENT_TYPE
                 // prevent http request when resolving any DTD references
                 d.XmlResolver = null;
+#endif
 
                 document = new XmlDocumentWrapper(d);
                 rootNode = document;
@@ -1446,33 +1664,32 @@ namespace Newtonsoft.Json.Converters
 
             if (document == null || rootNode == null)
             {
-                throw new JsonSerializationException("Unexpected type when converting XML: " + objectType);
-            }
-
-            if (reader.TokenType != JsonToken.StartObject)
-            {
-                throw new JsonSerializationException("XmlNodeConverter can only convert JSON that begins with an object.");
+                throw JsonSerializationException.Create(reader, "Unexpected type when converting XML: " + objectType);
             }
 
             if (!string.IsNullOrEmpty(DeserializeRootElementName))
             {
-                //rootNode = document.CreateElement(DeserializeRootElementName);
-                //document.AppendChild(rootNode);
                 ReadElement(reader, document, rootNode, DeserializeRootElementName, manager);
             }
             else
             {
-                reader.Read();
+                reader.ReadAndAssert();
                 DeserializeNode(reader, document, manager, rootNode);
             }
 
-#if !NET20
+#if HAVE_XLINQ
             if (objectType == typeof(XElement))
             {
                 XElement element = (XElement)document.DocumentElement.WrappedNode;
                 element.Remove();
 
                 return element;
+            }
+#endif
+#if HAVE_XML_DOCUMENT
+            if (objectType == typeof(XmlElement))
+            {
+                return document.DocumentElement.WrappedNode;
             }
 #endif
 
@@ -1484,16 +1701,16 @@ namespace Newtonsoft.Json.Converters
             switch (propertyName)
             {
                 case TextName:
-                    currentNode.AppendChild(document.CreateTextNode(reader.Value.ToString()));
+                    currentNode.AppendChild(document.CreateTextNode(ConvertTokenToXmlValue(reader)));
                     break;
                 case CDataName:
-                    currentNode.AppendChild(document.CreateCDataSection(reader.Value.ToString()));
+                    currentNode.AppendChild(document.CreateCDataSection(ConvertTokenToXmlValue(reader)));
                     break;
                 case WhitespaceName:
-                    currentNode.AppendChild(document.CreateWhitespace(reader.Value.ToString()));
+                    currentNode.AppendChild(document.CreateWhitespace(ConvertTokenToXmlValue(reader)));
                     break;
                 case SignificantWhitespaceName:
-                    currentNode.AppendChild(document.CreateSignificantWhitespace(reader.Value.ToString()));
+                    currentNode.AppendChild(document.CreateSignificantWhitespace(ConvertTokenToXmlValue(reader)));
                     break;
                 default:
                     // processing instructions and the xml declaration start with ?
@@ -1501,10 +1718,12 @@ namespace Newtonsoft.Json.Converters
                     {
                         CreateInstruction(reader, document, currentNode, propertyName);
                     }
+#if HAVE_XML_DOCUMENT_TYPE
                     else if (string.Equals(propertyName, "!DOCTYPE", StringComparison.OrdinalIgnoreCase))
                     {
                         CreateDocumentType(reader, document, currentNode);
                     }
+#endif
                     else
                     {
                         if (reader.TokenType == JsonToken.StartArray)
@@ -1571,46 +1790,49 @@ namespace Newtonsoft.Json.Converters
 
             currentNode.AppendChild(element);
 
-            // add attributes to newly created element
-            foreach (KeyValuePair<string, string> nameValue in attributeNameValues)
+            if (attributeNameValues != null)
             {
-                string encodedName = XmlConvert.EncodeName(nameValue.Key);
-                string attributePrefix = MiscellaneousUtils.GetPrefix(nameValue.Key);
-
-                IXmlNode attribute = (!string.IsNullOrEmpty(attributePrefix))
-                    ? document.CreateAttribute(encodedName, manager.LookupNamespace(attributePrefix) ?? string.Empty, nameValue.Value)
-                    : document.CreateAttribute(encodedName, nameValue.Value);
-
-                element.SetAttributeNode(attribute);
-            }
-
-            if (reader.TokenType == JsonToken.String
-                || reader.TokenType == JsonToken.Integer
-                || reader.TokenType == JsonToken.Float
-                || reader.TokenType == JsonToken.Boolean
-                || reader.TokenType == JsonToken.Date)
-            {
-                string text = ConvertTokenToXmlValue(reader);
-                if (text != null)
+                // add attributes to newly created element
+                foreach (KeyValuePair<string, string> nameValue in attributeNameValues)
                 {
-                    element.AppendChild(document.CreateTextNode(text));
+                    string encodedName = XmlConvert.EncodeName(nameValue.Key);
+                    string attributePrefix = MiscellaneousUtils.GetPrefix(nameValue.Key);
+
+                    IXmlNode attribute = (!string.IsNullOrEmpty(attributePrefix)) ? document.CreateAttribute(encodedName, manager.LookupNamespace(attributePrefix) ?? string.Empty, nameValue.Value) : document.CreateAttribute(encodedName, nameValue.Value);
+
+                    element.SetAttributeNode(attribute);
                 }
             }
-            else if (reader.TokenType == JsonToken.Null)
+
+            switch (reader.TokenType)
             {
-                // empty element. do nothing
-            }
-            else
-            {
-                // finished element will have no children to deserialize
-                if (reader.TokenType != JsonToken.EndObject)
-                {
+                case JsonToken.String:
+                case JsonToken.Integer:
+                case JsonToken.Float:
+                case JsonToken.Boolean:
+                case JsonToken.Date:
+                case JsonToken.Bytes:
+                    string text = ConvertTokenToXmlValue(reader);
+                    if (text != null)
+                    {
+                        element.AppendChild(document.CreateTextNode(text));
+                    }
+                    break;
+                case JsonToken.Null:
+
+                    // empty element. do nothing
+                    break;
+                case JsonToken.EndObject:
+
+                    // finished element will have no children to deserialize
+                    manager.RemoveNamespace(string.Empty, manager.DefaultNamespace);
+                    break;
+                default:
                     manager.PushScope();
                     DeserializeNode(reader, document, manager, element);
                     manager.PopScope();
-                }
-
-                manager.RemoveNamespace(string.Empty, manager.DefaultNamespace);
+                    manager.RemoveNamespace(string.Empty, manager.DefaultNamespace);
+                    break;
             }
         }
 
@@ -1618,11 +1840,11 @@ namespace Newtonsoft.Json.Converters
         {
             if (currentNode.NodeType == XmlNodeType.Document)
             {
-                throw JsonSerializationException.Create(reader, "JSON root object has property '{0}' that will be converted to an attribute. A root object cannot have any attribute properties. Consider specifing a DeserializeRootElementName.".FormatWith(CultureInfo.InvariantCulture, propertyName));
+                throw JsonSerializationException.Create(reader, "JSON root object has property '{0}' that will be converted to an attribute. A root object cannot have any attribute properties. Consider specifying a DeserializeRootElementName.".FormatWith(CultureInfo.InvariantCulture, propertyName));
             }
 
             string encodedName = XmlConvert.EncodeName(attributeName);
-            string attributeValue = reader.Value.ToString();
+            string attributeValue = ConvertTokenToXmlValue(reader);
 
             IXmlNode attribute = (!string.IsNullOrEmpty(attributePrefix))
                 ? document.CreateAttribute(encodedName, manager.LookupNamespace(attributePrefix), attributeValue)
@@ -1631,63 +1853,54 @@ namespace Newtonsoft.Json.Converters
             ((IXmlElement)currentNode).SetAttributeNode(attribute);
         }
 
-        private string ConvertTokenToXmlValue(JsonReader reader)
+        private static string ConvertTokenToXmlValue(JsonReader reader)
         {
-            if (reader.TokenType == JsonToken.String)
+            switch (reader.TokenType)
             {
-                return (reader.Value != null) ? reader.Value.ToString() : null;
-            }
-            else if (reader.TokenType == JsonToken.Integer)
-            {
-#if !(NET20 || NET35 || PORTABLE || PORTABLE40) || NETSTANDARD1_1
-                if (reader.Value is BigInteger)
-                {
-                    return ((BigInteger)reader.Value).ToString(CultureInfo.InvariantCulture);
-                }
+                case JsonToken.String:
+                    return reader.Value?.ToString();
+                case JsonToken.Integer:
+#if HAVE_BIG_INTEGER
+                    if (reader.Value is BigInteger)
+                    {
+                        return ((BigInteger)reader.Value).ToString(CultureInfo.InvariantCulture);
+                    }
 #endif
+                    return XmlConvert.ToString(Convert.ToInt64(reader.Value, CultureInfo.InvariantCulture));
+                case JsonToken.Float:
+                    if (reader.Value is decimal)
+                    {
+                        return XmlConvert.ToString((decimal)reader.Value);
+                    }
 
-                return XmlConvert.ToString(Convert.ToInt64(reader.Value, CultureInfo.InvariantCulture));
-            }
-            else if (reader.TokenType == JsonToken.Float)
-            {
-                if (reader.Value is decimal)
-                {
-                    return XmlConvert.ToString((decimal)reader.Value);
-                }
-                if (reader.Value is float)
-                {
-                    return XmlConvert.ToString((float)reader.Value);
-                }
+                    if (reader.Value is float)
+                    {
+                        return XmlConvert.ToString((float)reader.Value);
+                    }
 
-                return XmlConvert.ToString(Convert.ToDouble(reader.Value, CultureInfo.InvariantCulture));
-            }
-            else if (reader.TokenType == JsonToken.Boolean)
-            {
-                return XmlConvert.ToString(Convert.ToBoolean(reader.Value, CultureInfo.InvariantCulture));
-            }
-            else if (reader.TokenType == JsonToken.Date)
-            {
-#if !NET20
-                if (reader.Value is DateTimeOffset)
-                {
-                    return XmlConvert.ToString((DateTimeOffset)reader.Value);
-                }
+                    return XmlConvert.ToString(Convert.ToDouble(reader.Value, CultureInfo.InvariantCulture));
+                case JsonToken.Boolean:
+                    return XmlConvert.ToString(Convert.ToBoolean(reader.Value, CultureInfo.InvariantCulture));
+                case JsonToken.Date:
+#if HAVE_DATE_TIME_OFFSET
+                    if (reader.Value is DateTimeOffset)
+                    {
+                        return XmlConvert.ToString((DateTimeOffset)reader.Value);
+                    }
+
 #endif
-
-                DateTime d = Convert.ToDateTime(reader.Value, CultureInfo.InvariantCulture);
+                    DateTime d = Convert.ToDateTime(reader.Value, CultureInfo.InvariantCulture);
 #if !PORTABLE
-                return XmlConvert.ToString(d, DateTimeUtils.ToSerializationMode(d.Kind));
+                    return XmlConvert.ToString(d, DateTimeUtils.ToSerializationMode(d.Kind));
 #else
-                return XmlConvert.ToString(d, DateTimeUtils.ToDateTimeFormat(d.Kind));
+                    return XmlConvert.ToString(d, DateTimeUtils.ToDateTimeFormat(d.Kind));
 #endif
-            }
-            else if (reader.TokenType == JsonToken.Null)
-            {
-                return null;
-            }
-            else
-            {
-                throw JsonSerializationException.Create(reader, "Cannot get an XML string value from token type '{0}'.".FormatWith(CultureInfo.InvariantCulture, reader.TokenType));
+                case JsonToken.Bytes:
+                    return Convert.ToBase64String((byte[])reader.Value);
+                case JsonToken.Null:
+                    return null;
+                default:
+                    throw JsonSerializationException.Create(reader, "Cannot get an XML string value from token type '{0}'.".FormatWith(CultureInfo.InvariantCulture, reader.TokenType));
             }
         }
 
@@ -1729,7 +1942,7 @@ namespace Newtonsoft.Json.Converters
         {
             element.SetAttributeNode(document.CreateAttribute("json:Array", JsonNamespaceUri, "true"));
 
-#if !NET20
+#if HAVE_XLINQ
             // linq to xml doesn't automatically include prefixes via the namespace manager
             if (element is XElementWrapper)
             {
@@ -1743,114 +1956,130 @@ namespace Newtonsoft.Json.Converters
 
         private Dictionary<string, string> ReadAttributeElements(JsonReader reader, XmlNamespaceManager manager)
         {
-            Dictionary<string, string> attributeNameValues = new Dictionary<string, string>();
-            bool finishedAttributes = false;
-            bool finishedElement = false;
-
             // a string token means the element only has a single text child
-            if (reader.TokenType != JsonToken.String
-                && reader.TokenType != JsonToken.Null
-                && reader.TokenType != JsonToken.Boolean
-                && reader.TokenType != JsonToken.Integer
-                && reader.TokenType != JsonToken.Float
-                && reader.TokenType != JsonToken.Date
-                && reader.TokenType != JsonToken.StartConstructor)
+            switch (reader.TokenType)
             {
-                // read properties until first non-attribute is encountered
-                while (!finishedAttributes && !finishedElement && reader.Read())
+                case JsonToken.String:
+                case JsonToken.Null:
+                case JsonToken.Boolean:
+                case JsonToken.Integer:
+                case JsonToken.Float:
+                case JsonToken.Date:
+                case JsonToken.Bytes:
+                case JsonToken.StartConstructor:
+                    return null;
+            }
+
+            Dictionary<string, string> attributeNameValues = null;
+            bool finished = false;
+
+            // read properties until first non-attribute is encountered
+            while (!finished && reader.Read())
+            {
+                switch (reader.TokenType)
                 {
-                    switch (reader.TokenType)
-                    {
-                        case JsonToken.PropertyName:
-                            string attributeName = reader.Value.ToString();
+                    case JsonToken.PropertyName:
+                        string attributeName = reader.Value.ToString();
 
-                            if (!string.IsNullOrEmpty(attributeName))
+                        if (!string.IsNullOrEmpty(attributeName))
+                        {
+                            char firstChar = attributeName[0];
+                            string attributeValue;
+
+                            switch (firstChar)
                             {
-                                char firstChar = attributeName[0];
-                                string attributeValue;
+                                case '@':
+                                    if (attributeNameValues == null)
+                                    {
+                                        attributeNameValues = new Dictionary<string, string>();
+                                    }
 
-                                switch (firstChar)
-                                {
-                                    case '@':
-                                        attributeName = attributeName.Substring(1);
-                                        reader.Read();
-                                        attributeValue = ConvertTokenToXmlValue(reader);
-                                        attributeNameValues.Add(attributeName, attributeValue);
+                                    attributeName = attributeName.Substring(1);
+                                    reader.ReadAndAssert();
+                                    attributeValue = ConvertTokenToXmlValue(reader);
+                                    attributeNameValues.Add(attributeName, attributeValue);
 
-                                        string namespacePrefix;
-                                        if (IsNamespaceAttribute(attributeName, out namespacePrefix))
-                                        {
-                                            manager.AddNamespace(namespacePrefix, attributeValue);
-                                        }
-                                        break;
-                                    case '$':
-                                        switch (attributeName)
-                                        {
-                                            case JsonTypeReflector.ArrayValuesPropertyName:
-                                            case JsonTypeReflector.IdPropertyName:
-                                            case JsonTypeReflector.RefPropertyName:
-                                            case JsonTypeReflector.TypePropertyName:
-                                            case JsonTypeReflector.ValuePropertyName:
-                                                // check that JsonNamespaceUri is in scope
-                                                // if it isn't then add it to document and namespace manager
-                                                string jsonPrefix = manager.LookupPrefix(JsonNamespaceUri);
-                                                if (jsonPrefix == null)
+                                    string namespacePrefix;
+                                    if (IsNamespaceAttribute(attributeName, out namespacePrefix))
+                                    {
+                                        manager.AddNamespace(namespacePrefix, attributeValue);
+                                    }
+                                    break;
+                                case '$':
+                                    switch (attributeName)
+                                    {
+                                        case JsonTypeReflector.ArrayValuesPropertyName:
+                                        case JsonTypeReflector.IdPropertyName:
+                                        case JsonTypeReflector.RefPropertyName:
+                                        case JsonTypeReflector.TypePropertyName:
+                                        case JsonTypeReflector.ValuePropertyName:
+                                            // check that JsonNamespaceUri is in scope
+                                            // if it isn't then add it to document and namespace manager
+                                            string jsonPrefix = manager.LookupPrefix(JsonNamespaceUri);
+                                            if (jsonPrefix == null)
+                                            {
+                                                if (attributeNameValues == null)
                                                 {
-                                                    // ensure that the prefix used is free
-                                                    int? i = null;
-                                                    while (manager.LookupNamespace("json" + i) != null)
-                                                    {
-                                                        i = i.GetValueOrDefault() + 1;
-                                                    }
-                                                    jsonPrefix = "json" + i;
-
-                                                    attributeNameValues.Add("xmlns:" + jsonPrefix, JsonNamespaceUri);
-                                                    manager.AddNamespace(jsonPrefix, JsonNamespaceUri);
+                                                    attributeNameValues = new Dictionary<string, string>();
                                                 }
 
-                                                // special case $values, it will have a non-primitive value
-                                                if (attributeName == JsonTypeReflector.ArrayValuesPropertyName)
+                                                // ensure that the prefix used is free
+                                                int? i = null;
+                                                while (manager.LookupNamespace("json" + i) != null)
                                                 {
-                                                    finishedAttributes = true;
-                                                    break;
+                                                    i = i.GetValueOrDefault() + 1;
                                                 }
+                                                jsonPrefix = "json" + i;
 
-                                                attributeName = attributeName.Substring(1);
-                                                reader.Read();
+                                                attributeNameValues.Add("xmlns:" + jsonPrefix, JsonNamespaceUri);
+                                                manager.AddNamespace(jsonPrefix, JsonNamespaceUri);
+                                            }
 
-                                                if (!JsonTokenUtils.IsPrimitiveToken(reader.TokenType))
-                                                {
-                                                    throw JsonSerializationException.Create(reader, "Unexpected JsonToken: " + reader.TokenType);
-                                                }
-
-                                                attributeValue = (reader.Value != null) ? reader.Value.ToString() : null;
-                                                attributeNameValues.Add(jsonPrefix + ":" + attributeName, attributeValue);
+                                            // special case $values, it will have a non-primitive value
+                                            if (attributeName == JsonTypeReflector.ArrayValuesPropertyName)
+                                            {
+                                                finished = true;
                                                 break;
-                                            default:
-                                                finishedAttributes = true;
-                                                break;
-                                        }
-                                        break;
-                                    default:
-                                        finishedAttributes = true;
-                                        break;
-                                }
-                            }
-                            else
-                            {
-                                finishedAttributes = true;
-                            }
+                                            }
 
-                            break;
-                        case JsonToken.EndObject:
-                            finishedElement = true;
-                            break;
-                        case JsonToken.Comment:
-                            finishedElement = true;
-                            break;
-                        default:
-                            throw JsonSerializationException.Create(reader, "Unexpected JsonToken: " + reader.TokenType);
-                    }
+                                            attributeName = attributeName.Substring(1);
+                                            reader.ReadAndAssert();
+
+                                            if (!JsonTokenUtils.IsPrimitiveToken(reader.TokenType))
+                                            {
+                                                throw JsonSerializationException.Create(reader, "Unexpected JsonToken: " + reader.TokenType);
+                                            }
+
+                                            if (attributeNameValues == null)
+                                            {
+                                                attributeNameValues = new Dictionary<string, string>();
+                                            }
+
+                                            attributeValue = reader.Value?.ToString();
+                                            attributeNameValues.Add(jsonPrefix + ":" + attributeName, attributeValue);
+                                            break;
+                                        default:
+                                            finished = true;
+                                            break;
+                                    }
+                                    break;
+                                default:
+                                    finished = true;
+                                    break;
+                            }
+                        }
+                        else
+                        {
+                            finished = true;
+                        }
+
+                        break;
+                    case JsonToken.EndObject:
+                    case JsonToken.Comment:
+                        finished = true;
+                        break;
+                    default:
+                        throw JsonSerializationException.Create(reader, "Unexpected JsonToken: " + reader.TokenType);
                 }
             }
 
@@ -1869,16 +2098,16 @@ namespace Newtonsoft.Json.Converters
                     switch (reader.Value.ToString())
                     {
                         case "@version":
-                            reader.Read();
-                            version = reader.Value.ToString();
+                            reader.ReadAndAssert();
+                            version = ConvertTokenToXmlValue(reader);
                             break;
                         case "@encoding":
-                            reader.Read();
-                            encoding = reader.Value.ToString();
+                            reader.ReadAndAssert();
+                            encoding = ConvertTokenToXmlValue(reader);
                             break;
                         case "@standalone":
-                            reader.Read();
-                            standalone = reader.Value.ToString();
+                            reader.ReadAndAssert();
+                            standalone = ConvertTokenToXmlValue(reader);
                             break;
                         default:
                             throw JsonSerializationException.Create(reader, "Unexpected property name encountered while deserializing XmlDeclaration: " + reader.Value);
@@ -1890,11 +2119,12 @@ namespace Newtonsoft.Json.Converters
             }
             else
             {
-                IXmlNode instruction = document.CreateProcessingInstruction(propertyName.Substring(1), reader.Value.ToString());
+                IXmlNode instruction = document.CreateProcessingInstruction(propertyName.Substring(1), ConvertTokenToXmlValue(reader));
                 currentNode.AppendChild(instruction);
             }
         }
 
+#if HAVE_XML_DOCUMENT_TYPE
         private void CreateDocumentType(JsonReader reader, IXmlDocument document, IXmlNode currentNode)
         {
             string name = null;
@@ -1906,20 +2136,20 @@ namespace Newtonsoft.Json.Converters
                 switch (reader.Value.ToString())
                 {
                     case "@name":
-                        reader.Read();
-                        name = reader.Value.ToString();
+                        reader.ReadAndAssert();
+                        name = ConvertTokenToXmlValue(reader);
                         break;
                     case "@public":
-                        reader.Read();
-                        publicId = reader.Value.ToString();
+                        reader.ReadAndAssert();
+                        publicId = ConvertTokenToXmlValue(reader);
                         break;
                     case "@system":
-                        reader.Read();
-                        systemId = reader.Value.ToString();
+                        reader.ReadAndAssert();
+                        systemId = ConvertTokenToXmlValue(reader);
                         break;
                     case "@internalSubset":
-                        reader.Read();
-                        internalSubset = reader.Value.ToString();
+                        reader.ReadAndAssert();
+                        internalSubset = ConvertTokenToXmlValue(reader);
                         break;
                     default:
                         throw JsonSerializationException.Create(reader, "Unexpected property name encountered while deserializing XmlDeclaration: " + reader.Value);
@@ -1929,6 +2159,7 @@ namespace Newtonsoft.Json.Converters
             IXmlNode documentType = document.CreateXmlDocumentType(name, publicId, systemId, internalSubset);
             currentNode.AppendChild(documentType);
         }
+#endif
 
         private IXmlElement CreateElement(string elementName, IXmlDocument document, string elementPrefix, XmlNamespaceManager manager)
         {
@@ -1949,11 +2180,11 @@ namespace Newtonsoft.Json.Converters
                     case JsonToken.PropertyName:
                         if (currentNode.NodeType == XmlNodeType.Document && document.DocumentElement != null)
                         {
-                            throw JsonSerializationException.Create(reader, "JSON root object has multiple properties. The root object must have a single property in order to create a valid XML document. Consider specifing a DeserializeRootElementName.");
+                            throw JsonSerializationException.Create(reader, "JSON root object has multiple properties. The root object must have a single property in order to create a valid XML document. Consider specifying a DeserializeRootElementName.");
                         }
 
                         string propertyName = reader.Value.ToString();
-                        reader.Read();
+                        reader.ReadAndAssert();
 
                         if (reader.TokenType == JsonToken.StartArray)
                         {
@@ -1981,7 +2212,7 @@ namespace Newtonsoft.Json.Converters
                         {
                             DeserializeValue(reader, document, manager, propertyName, currentNode);
                         }
-                        break;
+                        continue;
                     case JsonToken.StartConstructor:
                         string constructorName = reader.Value.ToString();
 
@@ -1999,12 +2230,12 @@ namespace Newtonsoft.Json.Converters
                     default:
                         throw JsonSerializationException.Create(reader, "Unexpected JsonToken when deserializing node: " + reader.TokenType);
                 }
-            } while (reader.TokenType == JsonToken.PropertyName || reader.Read());
+            } while (reader.Read());
             // don't read if current token is a property. token was already read when parsing element attributes
         }
 
         /// <summary>
-        /// Checks if the attributeName is a namespace attribute.
+        /// Checks if the <paramref name="attributeName"/> is a namespace attribute.
         /// </summary>
         /// <param name="attributeName">Attribute name to test.</param>
         /// <param name="prefix">The attribute name prefix if it has one, otherwise an empty string.</param>
@@ -2032,15 +2263,22 @@ namespace Newtonsoft.Json.Converters
         {
             foreach (IXmlNode xmlNode in c)
             {
-                if (xmlNode.NamespaceUri != JsonNamespaceUri)
+                if (xmlNode.NamespaceUri == JsonNamespaceUri)
                 {
-                    return true;
+                    continue;
                 }
+
+                if (xmlNode.NamespaceUri == "http://www.w3.org/2000/xmlns/" && xmlNode.Value == JsonNamespaceUri)
+                {
+                    continue;
+                }
+
+                return true;
             }
 
             return false;
         }
-        #endregion
+#endregion
 
         /// <summary>
         /// Determines whether this instance can convert the specified value type.
@@ -2051,21 +2289,37 @@ namespace Newtonsoft.Json.Converters
         /// </returns>
         public override bool CanConvert(Type valueType)
         {
-#if !NET20
-            if (typeof(XObject).IsAssignableFrom(valueType))
+#if HAVE_XLINQ
+            if (valueType.AssignableToTypeName("System.Xml.Linq.XObject", false))
             {
-                return true;
+                return IsXObject(valueType);
             }
 #endif
-#if !(DOTNET || PORTABLE)
-            if (typeof(XmlNode).IsAssignableFrom(valueType))
+#if HAVE_XML_DOCUMENT
+            if (valueType.AssignableToTypeName("System.Xml.XmlNode", false))
             {
-                return true;
+                return IsXmlNode(valueType);
             }
 #endif
 
             return false;
         }
+
+#if HAVE_XLINQ
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private bool IsXObject(Type valueType)
+        {
+            return typeof(XObject).IsAssignableFrom(valueType);
+        }
+#endif
+
+#if HAVE_XML_DOCUMENT
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private bool IsXmlNode(Type valueType)
+        {
+            return typeof(XmlNode).IsAssignableFrom(valueType);
+        }
+#endif
     }
 }
 

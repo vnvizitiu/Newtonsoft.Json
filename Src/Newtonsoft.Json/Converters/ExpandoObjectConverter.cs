@@ -23,7 +23,7 @@
 // OTHER DEALINGS IN THE SOFTWARE.
 #endregion
 
-#if !(NET35 || NET20 || PORTABLE40)
+#if HAVE_DYNAMIC
 
 using System;
 using System.Collections.Generic;
@@ -36,7 +36,7 @@ using Newtonsoft.Json.Utilities;
 namespace Newtonsoft.Json.Converters
 {
     /// <summary>
-    /// Converts an ExpandoObject to and from JSON.
+    /// Converts an <see cref="ExpandoObject"/> to and from JSON.
     /// </summary>
     public class ExpandoObjectConverter : JsonConverter
     {

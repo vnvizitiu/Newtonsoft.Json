@@ -26,12 +26,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-#if !(NET20 || NET35 || PORTABLE40 || PORTABLE) || NETSTANDARD1_1
+#if HAVE_BIG_INTEGER
 using System.Numerics;
 #endif
 using Newtonsoft.Json.Utilities;
 using System.Globalization;
-#if NET20
+#if !HAVE_LINQ
 using Newtonsoft.Json.Utilities.LinqBridge;
 #else
 using System.Linq;
@@ -43,7 +43,7 @@ namespace Newtonsoft.Json
     /// <summary>
     /// Represents a writer that provides a fast, non-cached, forward-only way of generating JSON data.
     /// </summary>
-    public abstract class JsonWriter : IDisposable
+    public abstract partial class JsonWriter : IDisposable
     {
         internal enum State
         {
@@ -119,14 +119,20 @@ namespace Newtonsoft.Json
         private Formatting _formatting;
 
         /// <summary>
-        /// Gets or sets a value indicating whether the underlying stream or
-        /// <see cref="TextReader"/> should be closed when the writer is closed.
+        /// Gets or sets a value indicating whether the destination should be closed when this writer is closed.
         /// </summary>
         /// <value>
-        /// true to close the underlying stream or <see cref="TextReader"/> when
-        /// the writer is closed; otherwise false. The default is true.
+        /// <c>true</c> to close the destination when this writer is closed; otherwise <c>false</c>. The default is <c>true</c>.
         /// </value>
         public bool CloseOutput { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the JSON should be auto-completed when this writer is closed.
+        /// </summary>
+        /// <value>
+        /// <c>true</c> to auto-complete the JSON when this writer is closed; otherwise <c>false</c>. The default is <c>true</c>.
+        /// </value>
+        public bool AutoCompleteOnClose { get; set; }
 
         /// <summary>
         /// Gets the top.
@@ -221,7 +227,7 @@ namespace Newtonsoft.Json
         private CultureInfo _culture;
 
         /// <summary>
-        /// Indicates how JSON text output is formatted.
+        /// Gets or sets a value indicating how JSON text output should be formatted.
         /// </summary>
         public Formatting Formatting
         {
@@ -238,7 +244,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Get or set how dates are written to JSON text.
+        /// Gets or sets how dates are written to JSON text.
         /// </summary>
         public DateFormatHandling DateFormatHandling
         {
@@ -255,7 +261,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Get or set how <see cref="DateTime"/> time zones are handling when writing JSON text.
+        /// Gets or sets how <see cref="DateTime"/> time zones are handled when writing JSON text.
         /// </summary>
         public DateTimeZoneHandling DateTimeZoneHandling
         {
@@ -272,7 +278,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Get or set how strings are escaped when writing JSON text.
+        /// Gets or sets how strings are escaped when writing JSON text.
         /// </summary>
         public StringEscapeHandling StringEscapeHandling
         {
@@ -295,8 +301,8 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Get or set how special floating point numbers, e.g. <see cref="F:System.Double.NaN"/>,
-        /// <see cref="F:System.Double.PositiveInfinity"/> and <see cref="F:System.Double.NegativeInfinity"/>,
+        /// Gets or sets how special floating point numbers, e.g. <see cref="Double.NaN"/>,
+        /// <see cref="Double.PositiveInfinity"/> and <see cref="Double.NegativeInfinity"/>,
         /// are written to JSON text.
         /// </summary>
         public FloatFormatHandling FloatFormatHandling
@@ -314,7 +320,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Get or set how <see cref="DateTime"/> and <see cref="DateTimeOffset"/> values are formatting when writing JSON text.
+        /// Gets or sets how <see cref="DateTime"/> and <see cref="DateTimeOffset"/> values are formatted when writing JSON text.
         /// </summary>
         public string DateFormatString
         {
@@ -332,7 +338,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Creates an instance of the <c>JsonWriter</c> class. 
+        /// Initializes a new instance of the <see cref="JsonWriter"/> class.
         /// </summary>
         protected JsonWriter()
         {
@@ -341,6 +347,7 @@ namespace Newtonsoft.Json
             _dateTimeZoneHandling = DateTimeZoneHandling.RoundtripKind;
 
             CloseOutput = true;
+            AutoCompleteOnClose = true;
         }
 
         internal void UpdateScopeWithFinishedValue()
@@ -389,16 +396,21 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Flushes whatever is in the buffer to the underlying streams and also flushes the underlying stream.
+        /// Flushes whatever is in the buffer to the destination and also flushes the destination.
         /// </summary>
         public abstract void Flush();
 
         /// <summary>
-        /// Closes this stream and the underlying stream.
+        /// Closes this writer.
+        /// If <see cref="CloseOutput"/> is set to <c>true</c>, the destination is also closed.
+        /// If <see cref="AutoCompleteOnClose"/> is set to <c>true</c>, the JSON is auto-completed.
         /// </summary>
         public virtual void Close()
         {
-            AutoCompleteAll();
+            if (AutoCompleteOnClose)
+            {
+                AutoCompleteAll();
+            }
         }
 
         /// <summary>
@@ -451,7 +463,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes the property name of a name/value pair on a JSON object.
+        /// Writes the property name of a name/value pair of a JSON object.
         /// </summary>
         /// <param name="name">The name of the property.</param>
         public virtual void WritePropertyName(string name)
@@ -460,7 +472,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes the property name of a name/value pair on a JSON object.
+        /// Writes the property name of a name/value pair of a JSON object.
         /// </summary>
         /// <param name="name">The name of the property.</param>
         /// <param name="escape">A flag to indicate whether the text should be escaped when it is written as a JSON property name.</param>
@@ -505,7 +517,8 @@ namespace Newtonsoft.Json
         /// <param name="value">
         /// The value to write.
         /// A value is only required for tokens that have an associated value, e.g. the <see cref="String"/> property name for <see cref="JsonToken.PropertyName"/>.
-        /// A null value can be passed to the method for token's that don't have a value, e.g. <see cref="JsonToken.StartObject"/>.</param>
+        /// <c>null</c> can be passed to the method for tokens that don't have a value, e.g. <see cref="JsonToken.StartObject"/>.
+        /// </param>
         public void WriteToken(JsonToken token, object value)
         {
             switch (token)
@@ -528,11 +541,11 @@ namespace Newtonsoft.Json
                     WritePropertyName(value.ToString());
                     break;
                 case JsonToken.Comment:
-                    WriteComment((value != null) ? value.ToString() : null);
+                    WriteComment(value?.ToString());
                     break;
                 case JsonToken.Integer:
                     ValidationUtils.ArgumentNotNull(value, nameof(value));
-#if !(NET20 || NET35 || PORTABLE || PORTABLE40) || NETSTANDARD1_1
+#if HAVE_BIG_INTEGER
                     if (value is BigInteger)
                     {
                         WriteValue((BigInteger)value);
@@ -587,7 +600,7 @@ namespace Newtonsoft.Json
                     break;
                 case JsonToken.Date:
                     ValidationUtils.ArgumentNotNull(value, nameof(value));
-#if !NET20
+#if HAVE_DATE_TIME_OFFSET
                     if (value is DateTimeOffset)
                     {
                         WriteValue((DateTimeOffset)value);
@@ -599,7 +612,7 @@ namespace Newtonsoft.Json
                     }
                     break;
                 case JsonToken.Raw:
-                    WriteRawValue((value != null) ? value.ToString() : null);
+                    WriteRawValue(value?.ToString());
                     break;
                 case JsonToken.Bytes:
                     ValidationUtils.ArgumentNotNull(value, nameof(value));
@@ -628,20 +641,7 @@ namespace Newtonsoft.Json
 
         internal virtual void WriteToken(JsonReader reader, bool writeChildren, bool writeDateConstructorAsDate, bool writeComments)
         {
-            int initialDepth;
-
-            if (reader.TokenType == JsonToken.None)
-            {
-                initialDepth = -1;
-            }
-            else if (!JsonTokenUtils.IsStartToken(reader.TokenType))
-            {
-                initialDepth = reader.Depth + 1;
-            }
-            else
-            {
-                initialDepth = reader.Depth;
-            }
+            int initialDepth = CalculateWriteTokenInitialDepth(reader);
 
             do
             {
@@ -662,6 +662,33 @@ namespace Newtonsoft.Json
                 initialDepth - 1 < reader.Depth - (JsonTokenUtils.IsEndToken(reader.TokenType) ? 1 : 0)
                 && writeChildren
                 && reader.Read());
+
+            if (initialDepth < CalculateWriteTokenFinalDepth(reader))
+            {
+                throw JsonWriterException.Create(this, "Unexpected end when reading token.", null);
+            }
+        }
+
+        private int CalculateWriteTokenInitialDepth(JsonReader reader)
+        {
+            JsonToken type = reader.TokenType;
+            if (type == JsonToken.None)
+            {
+                return -1;
+            }
+
+            return JsonTokenUtils.IsStartToken(type) ? reader.Depth : reader.Depth + 1;
+        }
+
+        private int CalculateWriteTokenFinalDepth(JsonReader reader)
+        {
+            JsonToken type = reader.TokenType;
+            if (type == JsonToken.None)
+            {
+                return -1;
+            }
+
+            return JsonTokenUtils.IsEndToken(type) ? reader.Depth - 1 : reader.Depth;
         }
 
         private void WriteConstructorDate(JsonReader reader)
@@ -733,7 +760,33 @@ namespace Newtonsoft.Json
 
         private void AutoCompleteClose(JsonContainerType type)
         {
-            // write closing symbol and calculate new state
+            int levelsToComplete = CalculateLevelsToComplete(type);
+
+            for (int i = 0; i < levelsToComplete; i++)
+            {
+                JsonToken token = GetCloseTokenForType(Pop());
+
+                if (_currentState == State.Property)
+                {
+                    WriteNull();
+                }
+
+                if (_formatting == Formatting.Indented)
+                {
+                    if (_currentState != State.ObjectStart && _currentState != State.ArrayStart)
+                    {
+                        WriteIndent();
+                    }
+                }
+
+                WriteEnd(token);
+
+                UpdateCurrentState();
+            }
+        }
+
+        private int CalculateLevelsToComplete(JsonContainerType type)
+        {
             int levelsToComplete = 0;
 
             if (_currentPosition.Type == type)
@@ -760,44 +813,29 @@ namespace Newtonsoft.Json
                 throw JsonWriterException.Create(this, "No token to close.", null);
             }
 
-            for (int i = 0; i < levelsToComplete; i++)
+            return levelsToComplete;
+        }
+
+        private void UpdateCurrentState()
+        {
+            JsonContainerType currentLevelType = Peek();
+
+            switch (currentLevelType)
             {
-                JsonToken token = GetCloseTokenForType(Pop());
-
-                if (_currentState == State.Property)
-                {
-                    WriteNull();
-                }
-
-                if (_formatting == Formatting.Indented)
-                {
-                    if (_currentState != State.ObjectStart && _currentState != State.ArrayStart)
-                    {
-                        WriteIndent();
-                    }
-                }
-
-                WriteEnd(token);
-
-                JsonContainerType currentLevelType = Peek();
-
-                switch (currentLevelType)
-                {
-                    case JsonContainerType.Object:
-                        _currentState = State.Object;
-                        break;
-                    case JsonContainerType.Array:
-                        _currentState = State.Array;
-                        break;
-                    case JsonContainerType.Constructor:
-                        _currentState = State.Array;
-                        break;
-                    case JsonContainerType.None:
-                        _currentState = State.Start;
-                        break;
-                    default:
-                        throw JsonWriterException.Create(this, "Unknown JsonType: " + currentLevelType, null);
-                }
+                case JsonContainerType.Object:
+                    _currentState = State.Object;
+                    break;
+                case JsonContainerType.Array:
+                    _currentState = State.Array;
+                    break;
+                case JsonContainerType.Constructor:
+                    _currentState = State.Array;
+                    break;
+                case JsonContainerType.None:
+                    _currentState = State.Start;
+                    break;
+                default:
+                    throw JsonWriterException.Create(this, "Unknown JsonType: " + currentLevelType, null);
             }
         }
 
@@ -1040,7 +1078,7 @@ namespace Newtonsoft.Json
             InternalWriteValue(JsonToken.Date);
         }
 
-#if !NET20
+#if HAVE_DATE_TIME_OFFSET
         /// <summary>
         /// Writes a <see cref="DateTimeOffset"/> value.
         /// </summary>
@@ -1070,9 +1108,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{Int32}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="Int32"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{Int32}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="Int32"/> value to write.</param>
         public virtual void WriteValue(int? value)
         {
             if (value == null)
@@ -1086,9 +1124,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{UInt32}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="UInt32"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{UInt32}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="UInt32"/> value to write.</param>
         [CLSCompliant(false)]
         public virtual void WriteValue(uint? value)
         {
@@ -1103,9 +1141,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{Int64}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="Int64"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{Int64}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="Int64"/> value to write.</param>
         public virtual void WriteValue(long? value)
         {
             if (value == null)
@@ -1119,9 +1157,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{UInt64}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="UInt64"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{UInt64}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="UInt64"/> value to write.</param>
         [CLSCompliant(false)]
         public virtual void WriteValue(ulong? value)
         {
@@ -1136,9 +1174,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{Single}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="Single"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{Single}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="Single"/> value to write.</param>
         public virtual void WriteValue(float? value)
         {
             if (value == null)
@@ -1152,9 +1190,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{Double}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="Double"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{Double}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="Double"/> value to write.</param>
         public virtual void WriteValue(double? value)
         {
             if (value == null)
@@ -1168,9 +1206,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{Boolean}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="Boolean"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{Boolean}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="Boolean"/> value to write.</param>
         public virtual void WriteValue(bool? value)
         {
             if (value == null)
@@ -1184,9 +1222,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{Int16}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="Int16"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{Int16}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="Int16"/> value to write.</param>
         public virtual void WriteValue(short? value)
         {
             if (value == null)
@@ -1200,9 +1238,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{UInt16}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="UInt16"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{UInt16}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="UInt16"/> value to write.</param>
         [CLSCompliant(false)]
         public virtual void WriteValue(ushort? value)
         {
@@ -1217,9 +1255,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{Char}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="Char"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{Char}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="Char"/> value to write.</param>
         public virtual void WriteValue(char? value)
         {
             if (value == null)
@@ -1233,9 +1271,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{Byte}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="Byte"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{Byte}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="Byte"/> value to write.</param>
         public virtual void WriteValue(byte? value)
         {
             if (value == null)
@@ -1249,9 +1287,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{SByte}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="SByte"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{SByte}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="SByte"/> value to write.</param>
         [CLSCompliant(false)]
         public virtual void WriteValue(sbyte? value)
         {
@@ -1266,9 +1304,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{Decimal}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="Decimal"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{Decimal}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="Decimal"/> value to write.</param>
         public virtual void WriteValue(decimal? value)
         {
             if (value == null)
@@ -1282,9 +1320,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{DateTime}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="DateTime"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{DateTime}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="DateTime"/> value to write.</param>
         public virtual void WriteValue(DateTime? value)
         {
             if (value == null)
@@ -1297,11 +1335,11 @@ namespace Newtonsoft.Json
             }
         }
 
-#if !NET20
+#if HAVE_DATE_TIME_OFFSET
         /// <summary>
-        /// Writes a <see cref="Nullable{DateTimeOffset}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="DateTimeOffset"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{DateTimeOffset}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="DateTimeOffset"/> value to write.</param>
         public virtual void WriteValue(DateTimeOffset? value)
         {
             if (value == null)
@@ -1316,9 +1354,9 @@ namespace Newtonsoft.Json
 #endif
 
         /// <summary>
-        /// Writes a <see cref="Nullable{Guid}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="Guid"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{Guid}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="Guid"/> value to write.</param>
         public virtual void WriteValue(Guid? value)
         {
             if (value == null)
@@ -1332,9 +1370,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes a <see cref="Nullable{TimeSpan}"/> value.
+        /// Writes a <see cref="Nullable{T}"/> of <see cref="TimeSpan"/> value.
         /// </summary>
-        /// <param name="value">The <see cref="Nullable{TimeSpan}"/> value to write.</param>
+        /// <param name="value">The <see cref="Nullable{T}"/> of <see cref="TimeSpan"/> value to write.</param>
         public virtual void WriteValue(TimeSpan? value)
         {
             if (value == null)
@@ -1392,7 +1430,7 @@ namespace Newtonsoft.Json
             }
             else
             {
-#if !(NET20 || NET35 || PORTABLE || PORTABLE40) || NETSTANDARD1_1
+#if HAVE_BIG_INTEGER
                 // this is here because adding a WriteValue(BigInteger) to JsonWriter will
                 // mean the user has to add a reference to System.Numerics.dll
                 if (value is BigInteger)
@@ -1407,7 +1445,7 @@ namespace Newtonsoft.Json
         #endregion
 
         /// <summary>
-        /// Writes out a comment <code>/*...*/</code> containing the specified text. 
+        /// Writes a comment <c>/*...*/</c> containing the specified text.
         /// </summary>
         /// <param name="text">Text to place inside the comment.</param>
         public virtual void WriteComment(string text)
@@ -1416,7 +1454,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Writes out the given white space.
+        /// Writes the given white space.
         /// </summary>
         /// <param name="ws">The string of white space characters.</param>
         public virtual void WriteWhitespace(string ws)
@@ -1431,7 +1469,7 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Releases unmanaged and - optionally - managed resources
+        /// Releases unmanaged and - optionally - managed resources.
         /// </summary>
         /// <param name="disposing"><c>true</c> to release both managed and unmanaged resources; <c>false</c> to release only unmanaged resources.</param>
         protected virtual void Dispose(bool disposing)
@@ -1524,7 +1562,7 @@ namespace Newtonsoft.Json
                 case PrimitiveTypeCode.DateTimeNullable:
                     writer.WriteValue((value == null) ? (DateTime?)null : (DateTime)value);
                     break;
-#if !NET20
+#if HAVE_DATE_TIME_OFFSET
                 case PrimitiveTypeCode.DateTimeOffset:
                     writer.WriteValue((DateTimeOffset)value);
                     break;
@@ -1550,7 +1588,7 @@ namespace Newtonsoft.Json
                 case PrimitiveTypeCode.TimeSpanNullable:
                     writer.WriteValue((value == null) ? (TimeSpan?)null : (TimeSpan)value);
                     break;
-#if !(PORTABLE || PORTABLE40 || NET35 || NET20) || NETSTANDARD1_1
+#if HAVE_BIG_INTEGER
                 case PrimitiveTypeCode.BigInteger:
                     // this will call to WriteValue(object)
                     writer.WriteValue((BigInteger)value);
@@ -1569,35 +1607,32 @@ namespace Newtonsoft.Json
                 case PrimitiveTypeCode.Bytes:
                     writer.WriteValue((byte[])value);
                     break;
-#if !(PORTABLE || DOTNET)
+#if HAVE_DB_NULL_TYPE_CODE
                 case PrimitiveTypeCode.DBNull:
                     writer.WriteNull();
                     break;
 #endif
                 default:
-#if !PORTABLE
-                    if (value is IConvertible)
+#if HAVE_ICONVERTIBLE
+                    IConvertible convertible = value as IConvertible;
+                    if (convertible != null)
                     {
                         // the value is a non-standard IConvertible
                         // convert to the underlying value and retry
-                        IConvertible convertable = (IConvertible)value;
 
-                        TypeInformation typeInformation = ConvertUtils.GetTypeInformation(convertable);
+                        TypeInformation typeInformation = ConvertUtils.GetTypeInformation(convertible);
 
-                        // if convertable has an underlying typecode of Object then attempt to convert it to a string
+                        // if convertible has an underlying typecode of Object then attempt to convert it to a string
                         PrimitiveTypeCode resolvedTypeCode = (typeInformation.TypeCode == PrimitiveTypeCode.Object) ? PrimitiveTypeCode.String : typeInformation.TypeCode;
                         Type resolvedType = (typeInformation.TypeCode == PrimitiveTypeCode.Object) ? typeof(string) : typeInformation.Type;
 
-                        object convertedValue = convertable.ToType(resolvedType, CultureInfo.InvariantCulture);
+                        object convertedValue = convertible.ToType(resolvedType, CultureInfo.InvariantCulture);
 
                         WriteValue(writer, resolvedTypeCode, convertedValue);
                         break;
                     }
-                    else
 #endif
-                    {
-                        throw CreateUnsupportedTypeException(writer, value);
-                    }
+                    throw CreateUnsupportedTypeException(writer, value);
             }
         }
 
@@ -1607,9 +1642,9 @@ namespace Newtonsoft.Json
         }
 
         /// <summary>
-        /// Sets the state of the JsonWriter,
+        /// Sets the state of the <see cref="JsonWriter"/>.
         /// </summary>
-        /// <param name="token">The JsonToken being written.</param>
+        /// <param name="token">The <see cref="JsonToken"/> being written.</param>
         /// <param name="value">The value being written.</param>
         protected void SetWriteState(JsonToken token, object value)
         {

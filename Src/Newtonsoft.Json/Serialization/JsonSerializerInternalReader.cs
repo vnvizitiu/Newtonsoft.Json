@@ -1,4 +1,4 @@
-﻿#region License
+#region License
 // Copyright (c) 2007 James Newton-King
 //
 // Permission is hereby granted, free of charge, to any person
@@ -27,20 +27,20 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-#if !(NET35 || NET20 || PORTABLE40)
+#if HAVE_DYNAMIC
 using System.ComponentModel;
 using System.Dynamic;
 #endif
 using System.Diagnostics;
 using System.Globalization;
-#if !(PORTABLE || PORTABLE40 || NET35 || NET20) || NETSTANDARD1_1
+#if HAVE_BIG_INTEGER
 using System.Numerics;
 #endif
 using System.Reflection;
 using System.Runtime.Serialization;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Utilities;
-#if NET20
+#if !HAVE_LINQ
 using Newtonsoft.Json.Utilities.LinqBridge;
 #else
 using System.Linq;
@@ -99,7 +99,7 @@ namespace Newtonsoft.Json.Serialization
                     && string.Equals(reader.Value.ToString(), JsonTypeReflector.IdPropertyName, StringComparison.Ordinal))
                 {
                     reader.ReadAndAssert();
-                    id = (reader.Value != null) ? reader.Value.ToString() : null;
+                    id = reader.Value?.ToString();
                     reader.ReadAndAssert();
                 }
 
@@ -146,7 +146,7 @@ namespace Newtonsoft.Json.Serialization
             {
                 JsonConverter converter = GetConverter(contract, null, null, null);
 
-                if (reader.TokenType == JsonToken.None && !ReadForType(reader, contract, converter != null))
+                if (reader.TokenType == JsonToken.None && !reader.ReadForType(contract, converter != null))
                 {
                     if (contract != null && !contract.IsNullable)
                     {
@@ -169,9 +169,12 @@ namespace Newtonsoft.Json.Serialization
 
                 if (checkAdditionalContent)
                 {
-                    if (reader.Read() && reader.TokenType != JsonToken.Comment)
+                    while (reader.Read())
                     {
-                        throw new JsonSerializationException("Additional text found in JSON string after finishing deserializing object.");
+                        if (reader.TokenType != JsonToken.Comment)
+                        {
+                            throw JsonSerializationException.Create(reader, "Additional text found in JSON string after finishing deserializing object.");
+                        }
                     }
                 }
 
@@ -319,7 +322,7 @@ namespace Newtonsoft.Json.Serialization
                         return EnsureType(reader, constructorName, CultureInfo.InvariantCulture, contract, objectType);
                     case JsonToken.Null:
                     case JsonToken.Undefined:
-#if !(DOTNET || PORTABLE40 || PORTABLE)
+#if HAVE_ADO_NET
                         if (objectType == typeof(DBNull))
                         {
                             return DBNull.Value;
@@ -351,10 +354,10 @@ namespace Newtonsoft.Json.Serialization
             {
                 case JsonContractType.Object:
                 case JsonContractType.Dictionary:
-#if !(DOTNET || PORTABLE || PORTABLE40)
+#if HAVE_BINARY_SERIALIZATION
                 case JsonContractType.Serializable:
 #endif
-#if !(NET35 || NET20 || PORTABLE40)
+#if HAVE_DYNAMIC
                 case JsonContractType.Dynamic:
 #endif
                     return @"JSON object (e.g. {""name"":""value""})";
@@ -377,11 +380,11 @@ namespace Newtonsoft.Json.Serialization
                 // member attribute converter
                 converter = memberConverter;
             }
-            else if (containerProperty != null && containerProperty.ItemConverter != null)
+            else if (containerProperty?.ItemConverter != null)
             {
                 converter = containerProperty.ItemConverter;
             }
-            else if (containerContract != null && containerContract.ItemConverter != null)
+            else if (containerContract?.ItemConverter != null)
             {
                 converter = containerContract.ItemConverter;
             }
@@ -563,12 +566,12 @@ namespace Newtonsoft.Json.Serialization
 
                     return targetDictionary;
                 }
-#if !(NET35 || NET20 || PORTABLE40)
+#if HAVE_DYNAMIC
                 case JsonContractType.Dynamic:
                     JsonDynamicContract dynamicContract = (JsonDynamicContract)contract;
                     return CreateDynamic(reader, dynamicContract, member, id);
 #endif
-#if !(DOTNET || PORTABLE40 || PORTABLE)
+#if HAVE_BINARY_SERIALIZATION
                 case JsonContractType.Serializable:
                     JsonISerializableContract serializableContract = (JsonISerializableContract)contract;
                     return CreateISerializable(reader, serializableContract, member, id);
@@ -705,7 +708,7 @@ namespace Newtonsoft.Json.Serialization
                                 throw JsonSerializationException.Create(reader, "JSON reference {0} property must have a string or null value.".FormatWith(CultureInfo.InvariantCulture, JsonTypeReflector.RefPropertyName));
                             }
 
-                            string reference = (reader.Value != null) ? reader.Value.ToString() : null;
+                            string reference = reader.Value?.ToString();
 
                             reader.ReadAndAssert();
 
@@ -745,7 +748,7 @@ namespace Newtonsoft.Json.Serialization
                         {
                             reader.ReadAndAssert();
 
-                            id = (reader.Value != null) ? reader.Value.ToString() : null;
+                            id = reader.Value?.ToString();
 
                             reader.ReadAndAssert();
                             metadataProperty = true;
@@ -771,9 +774,9 @@ namespace Newtonsoft.Json.Serialization
         private void ResolveTypeName(JsonReader reader, ref Type objectType, ref JsonContract contract, JsonProperty member, JsonContainerContract containerContract, JsonProperty containerMember, string qualifiedTypeName)
         {
             TypeNameHandling resolvedTypeNameHandling =
-                ((member != null) ? member.TypeNameHandling : null)
-                ?? ((containerContract != null) ? containerContract.ItemTypeNameHandling : null)
-                ?? ((containerMember != null) ? containerMember.ItemTypeNameHandling : null)
+                member?.TypeNameHandling
+                ?? containerContract?.ItemTypeNameHandling
+                ?? containerMember?.ItemTypeNameHandling
                 ?? Serializer._typeNameHandling;
 
             if (resolvedTypeNameHandling != TypeNameHandling.None)
@@ -801,7 +804,7 @@ namespace Newtonsoft.Json.Serialization
                 }
 
                 if (objectType != null
-#if !(NET35 || NET20 || PORTABLE40)
+#if HAVE_DYNAMIC
                     && objectType != typeof(IDynamicMetaObjectProvider)
 #endif
                     && !objectType.IsAssignableFrom(specifiedType))
@@ -924,7 +927,7 @@ namespace Newtonsoft.Json.Serialization
         private bool HasNoDefinedType(JsonContract contract)
         {
             return (contract == null || contract.UnderlyingType == typeof(object) || contract.ContractType == JsonContractType.Linq
-#if !(NET35 || NET20 || PORTABLE40)
+#if HAVE_DYNAMIC
                     || contract.UnderlyingType == typeof(IDynamicMetaObjectProvider)
 #endif
                 );
@@ -966,7 +969,7 @@ namespace Newtonsoft.Json.Serialization
                             }
                         }
 
-#if !(PORTABLE || PORTABLE40 || NET35 || NET20) || NETSTANDARD1_1
+#if HAVE_BIG_INTEGER
                         if (value is BigInteger)
                         {
                             return ConvertUtils.FromBigInteger((BigInteger)value, contract.NonNullableUnderlyingType);
@@ -1083,13 +1086,13 @@ namespace Newtonsoft.Json.Serialization
                 return true;
             }
 
-            // test tokentype here because null might not be convertable to some types, e.g. ignoring null when applied to DateTime
+            // test tokenType here because null might not be convertible to some types, e.g. ignoring null when applied to DateTime
             if (property.NullValueHandling.GetValueOrDefault(Serializer._nullValueHandling) == NullValueHandling.Ignore && tokenType == JsonToken.Null)
             {
                 return true;
             }
 
-            // test tokentype here because default value might not be convertable to actual type, e.g. default of "" for DateTime
+            // test tokenType here because default value might not be convertible to actual type, e.g. default of "" for DateTime
             if (HasFlag(property.DefaultValueHandling.GetValueOrDefault(Serializer._defaultValueHandling), DefaultValueHandling.Ignore)
                 && !HasFlag(property.DefaultValueHandling.GetValueOrDefault(Serializer._defaultValueHandling), DefaultValueHandling.Populate)
                 && JsonTokenUtils.IsPrimitiveToken(tokenType)
@@ -1108,7 +1111,7 @@ namespace Newtonsoft.Json.Serialization
 
                 if (propertyContract != property.PropertyContract)
                 {
-                    propertyConverter = GetConverter(propertyContract, property.MemberConverter, containerContract, containerProperty);
+                    propertyConverter = GetConverter(propertyContract, property.Converter, containerContract, containerProperty);
                 }
             }
 
@@ -1320,7 +1323,8 @@ namespace Newtonsoft.Json.Serialization
             }
 
             JsonConverter dictionaryValueConverter = contract.ItemConverter ?? GetConverter(contract.ItemContract, null, contract, containerProperty);
-            PrimitiveTypeCode keyTypeCode = (contract.KeyContract is JsonPrimitiveContract) ? ((JsonPrimitiveContract)contract.KeyContract).TypeCode : PrimitiveTypeCode.Empty;
+            JsonPrimitiveContract keyContract = contract.KeyContract as JsonPrimitiveContract;
+            PrimitiveTypeCode keyTypeCode = (keyContract != null) ? keyContract.TypeCode : PrimitiveTypeCode.Empty;
 
             bool finished = false;
             do
@@ -1355,7 +1359,7 @@ namespace Newtonsoft.Json.Serialization
                                         }
                                         break;
                                     }
-#if !NET20
+#if HAVE_DATE_TIME_OFFSET
                                     case PrimitiveTypeCode.DateTimeOffset:
                                     case PrimitiveTypeCode.DateTimeOffsetNullable:
                                     {
@@ -1381,7 +1385,7 @@ namespace Newtonsoft.Json.Serialization
                                 throw JsonSerializationException.Create(reader, "Could not convert string '{0}' to dictionary key type '{1}'. Create a TypeConverter to convert from the string to the key type object.".FormatWith(CultureInfo.InvariantCulture, reader.Value, contract.DictionaryKeyType), ex);
                             }
 
-                            if (!ReadForType(reader, contract.ItemContract, dictionaryValueConverter != null))
+                            if (!reader.ReadForType(contract.ItemContract, dictionaryValueConverter != null))
                             {
                                 throw JsonSerializationException.Create(reader, "Unexpected end when deserializing object.");
                             }
@@ -1457,7 +1461,7 @@ namespace Newtonsoft.Json.Serialization
                 {
                     try
                     {
-                        if (ReadForType(reader, collectionItemContract, collectionItemConverter != null))
+                        if (reader.ReadForType(collectionItemContract, collectionItemConverter != null))
                         {
                             switch (reader.TokenType)
                             {
@@ -1612,7 +1616,7 @@ namespace Newtonsoft.Json.Serialization
             {
                 try
                 {
-                    if (ReadForType(reader, contract.ItemContract, collectionItemConverter != null))
+                    if (reader.ReadForType(contract.ItemContract, collectionItemConverter != null))
                     {
                         switch (reader.TokenType)
                         {
@@ -1675,7 +1679,7 @@ namespace Newtonsoft.Json.Serialization
             return underlyingList;
         }
 
-#if !(DOTNET || PORTABLE40 || PORTABLE)
+#if HAVE_BINARY_SERIALIZATION
         private object CreateISerializable(JsonReader reader, JsonISerializableContract contract, JsonProperty member, string id)
         {
             Type objectType = contract.UnderlyingType;
@@ -1765,7 +1769,7 @@ namespace Newtonsoft.Json.Serialization
         }
 #endif
 
-#if !(NET35 || NET20 || PORTABLE40)
+#if HAVE_DYNAMIC
         private object CreateDynamic(JsonReader reader, JsonDynamicContract contract, JsonProperty member, string id)
         {
             IDynamicMetaObjectProvider newObject;
@@ -1819,7 +1823,7 @@ namespace Newtonsoft.Json.Serialization
                                     property.PropertyContract = GetContractSafe(property.PropertyType);
                                 }
 
-                                JsonConverter propertyConverter = GetConverter(property.PropertyContract, property.MemberConverter, null, null);
+                                JsonConverter propertyConverter = GetConverter(property.PropertyContract, property.Converter, null, null);
 
                                 if (!SetPropertyValue(property, propertyConverter, null, member, reader, newObject))
                                 {
@@ -1891,14 +1895,18 @@ namespace Newtonsoft.Json.Serialization
         {
             ValidationUtils.ArgumentNotNull(creator, nameof(creator));
 
-            // only need to keep a track of properies presence if they are required or a value should be defaulted if missing
+            // only need to keep a track of properties' presence if they are required or a value should be defaulted if missing
             bool trackPresence = (contract.HasRequiredOrDefaultValueProperties || HasFlag(Serializer._defaultValueHandling, DefaultValueHandling.Populate));
 
             Type objectType = contract.UnderlyingType;
 
             if (TraceWriter != null && TraceWriter.LevelFilter >= TraceLevel.Info)
             {
-                string parameters = string.Join(", ", contract.CreatorParameters.Select(p => p.PropertyName).ToArray());
+                string parameters = string.Join(", ", contract.CreatorParameters.Select(p => p.PropertyName)
+#if !HAVE_STRING_JOIN_WITH_ENUMERABLE
+                    .ToArray()
+#endif
+                    );
                 TraceWriter.Trace(TraceLevel.Info, JsonPosition.FormatMessage(reader as IJsonLineInfo, reader.Path, "Deserializing {0} using creator with parameters: {1}.".FormatWith(CultureInfo.InvariantCulture, contract.UnderlyingType, parameters)), null);
             }
 
@@ -2024,15 +2032,18 @@ namespace Newtonsoft.Json.Serialization
                     {
                         JsonArrayContract propertyArrayContract = (JsonArrayContract)propertyContract;
 
-                        object createdObjectCollection = property.ValueProvider.GetValue(createdObject);
-                        if (createdObjectCollection != null)
+                        if (propertyArrayContract.CanDeserialize)
                         {
-                            IWrappedCollection createdObjectCollectionWrapper = propertyArrayContract.CreateWrapper(createdObjectCollection);
-                            IWrappedCollection newValues = propertyArrayContract.CreateWrapper(value);
-
-                            foreach (object newValue in newValues)
+                            object createdObjectCollection = property.ValueProvider.GetValue(createdObject);
+                            if (createdObjectCollection != null)
                             {
-                                createdObjectCollectionWrapper.Add(newValue);
+                                IList createdObjectCollectionWrapper = (propertyArrayContract.ShouldCreateWrapper) ? propertyArrayContract.CreateWrapper(createdObjectCollection) : (IList)createdObjectCollection;
+                                IList newValues = (propertyArrayContract.ShouldCreateWrapper) ? propertyArrayContract.CreateWrapper(value) : (IList)value;
+
+                                foreach (object newValue in newValues)
+                                {
+                                    createdObjectCollectionWrapper.Add(newValue);
+                                }
                             }
                         }
                     }
@@ -2040,25 +2051,28 @@ namespace Newtonsoft.Json.Serialization
                     {
                         JsonDictionaryContract dictionaryContract = (JsonDictionaryContract)propertyContract;
 
-                        object createdObjectDictionary = property.ValueProvider.GetValue(createdObject);
-                        if (createdObjectDictionary != null)
+                        if (!dictionaryContract.IsReadOnlyOrFixedSize)
                         {
-                            IDictionary targetDictionary = (dictionaryContract.ShouldCreateWrapper) ? dictionaryContract.CreateWrapper(createdObjectDictionary) : (IDictionary)createdObjectDictionary;
-                            IDictionary newValues = (dictionaryContract.ShouldCreateWrapper) ? dictionaryContract.CreateWrapper(value) : (IDictionary)value;
+                            object createdObjectDictionary = property.ValueProvider.GetValue(createdObject);
+                            if (createdObjectDictionary != null)
+                            {
+                                IDictionary targetDictionary = (dictionaryContract.ShouldCreateWrapper) ? dictionaryContract.CreateWrapper(createdObjectDictionary) : (IDictionary)createdObjectDictionary;
+                                IDictionary newValues = (dictionaryContract.ShouldCreateWrapper) ? dictionaryContract.CreateWrapper(value) : (IDictionary)value;
 
-                            // Manual use of IDictionaryEnumerator instead of foreach to avoid DictionaryEntry box allocations.
-                            IDictionaryEnumerator e = newValues.GetEnumerator();
-                            try
-                            {
-                                while (e.MoveNext())
+                                // Manual use of IDictionaryEnumerator instead of foreach to avoid DictionaryEntry box allocations.
+                                IDictionaryEnumerator e = newValues.GetEnumerator();
+                                try
                                 {
-                                    DictionaryEntry entry = e.Entry;
-                                    targetDictionary[entry.Key] = entry.Value;
+                                    while (e.MoveNext())
+                                    {
+                                        DictionaryEntry entry = e.Entry;
+                                        targetDictionary[entry.Key] = entry.Value;
+                                    }
                                 }
-                            }
-                            finally
-                            {
-                                (e as IDisposable)?.Dispose();
+                                finally
+                                {
+                                    (e as IDisposable)?.Dispose();
+                                }
                             }
                         }
                     }
@@ -2146,9 +2160,9 @@ namespace Newtonsoft.Json.Serialization
                                 property.PropertyContract = GetContractSafe(property.PropertyType);
                             }
 
-                            JsonConverter propertyConverter = GetConverter(property.PropertyContract, property.MemberConverter, contract, containerProperty);
+                            JsonConverter propertyConverter = GetConverter(property.PropertyContract, property.Converter, contract, containerProperty);
 
-                            if (!ReadForType(reader, property.PropertyContract, propertyConverter != null))
+                            if (!reader.ReadForType(property.PropertyContract, propertyConverter != null))
                             {
                                 throw JsonSerializationException.Create(reader, "Unexpected end when setting {0}'s value.".FormatWith(CultureInfo.InvariantCulture, memberName));
                             }
@@ -2209,54 +2223,6 @@ namespace Newtonsoft.Json.Serialization
             return propertyValues;
         }
 
-        private bool ReadForType(JsonReader reader, JsonContract contract, bool hasConverter)
-        {
-            // don't read properties with converters as a specific value
-            // the value might be a string which will then get converted which will error if read as date for example
-            if (hasConverter)
-            {
-                return reader.Read();
-            }
-
-            ReadType t = (contract != null) ? contract.InternalReadType : ReadType.Read;
-
-            switch (t)
-            {
-                case ReadType.Read:
-                    return reader.ReadAndMoveToContent();
-                case ReadType.ReadAsInt32:
-                    reader.ReadAsInt32();
-                    break;
-                case ReadType.ReadAsDecimal:
-                    reader.ReadAsDecimal();
-                    break;
-                case ReadType.ReadAsDouble:
-                    reader.ReadAsDouble();
-                    break;
-                case ReadType.ReadAsBytes:
-                    reader.ReadAsBytes();
-                    break;
-                case ReadType.ReadAsBoolean:
-                    reader.ReadAsBoolean();
-                    break;
-                case ReadType.ReadAsString:
-                    reader.ReadAsString();
-                    break;
-                case ReadType.ReadAsDateTime:
-                    reader.ReadAsDateTime();
-                    break;
-#if !NET20
-                case ReadType.ReadAsDateTimeOffset:
-                    reader.ReadAsDateTimeOffset();
-                    break;
-#endif
-                default:
-                    throw new ArgumentOutOfRangeException();
-            }
-
-            return (reader.TokenType != JsonToken.None);
-        }
-
         public object CreateNewObject(JsonReader reader, JsonObjectContract objectContract, JsonProperty containerMember, JsonProperty containerProperty, string id, out bool createdFromNonDefaultCreator)
         {
             object newObject = null;
@@ -2269,7 +2235,7 @@ namespace Newtonsoft.Json.Serialization
                     return CreateObjectUsingCreatorWithParameters(reader, objectContract, containerMember, objectContract.OverrideCreator, id);
                 }
 
-                newObject = objectContract.OverrideCreator(new object[0]);
+                newObject = objectContract.OverrideCreator(CollectionUtils.ArrayEmpty<object>());
             }
             else if (objectContract.DefaultCreator != null &&
                      (!objectContract.DefaultCreatorNonPublic || Serializer._constructorHandling == ConstructorHandling.AllowNonPublicDefaultConstructor || objectContract.ParameterizedCreator == null))
@@ -2304,7 +2270,7 @@ namespace Newtonsoft.Json.Serialization
         {
             OnDeserializing(reader, contract, newObject);
 
-            // only need to keep a track of properies presence if they are required or a value should be defaulted if missing
+            // only need to keep a track of properties' presence if they are required or a value should be defaulted if missing
             Dictionary<JsonProperty, PropertyPresence> propertiesPresence = (contract.HasRequiredOrDefaultValueProperties || HasFlag(Serializer._defaultValueHandling, DefaultValueHandling.Populate))
                 ? contract.Properties.ToDictionary(m => m, m => PropertyPresence.None)
                 : null;
@@ -2374,9 +2340,9 @@ namespace Newtonsoft.Json.Serialization
                                     property.PropertyContract = GetContractSafe(property.PropertyType);
                                 }
 
-                                JsonConverter propertyConverter = GetConverter(property.PropertyContract, property.MemberConverter, contract, member);
+                                JsonConverter propertyConverter = GetConverter(property.PropertyContract, property.Converter, contract, member);
 
-                                if (!ReadForType(reader, property.PropertyContract, propertyConverter != null))
+                                if (!reader.ReadForType(property.PropertyContract, propertyConverter != null))
                                 {
                                     throw JsonSerializationException.Create(reader, "Unexpected end when setting {0}'s value.".FormatWith(CultureInfo.InvariantCulture, memberName));
                                 }
@@ -2394,7 +2360,7 @@ namespace Newtonsoft.Json.Serialization
                         {
                             if (IsErrorHandled(newObject, contract, memberName, reader as IJsonLineInfo, reader.Path, ex))
                             {
-                                HandleError(reader, true, initialDepth);
+                                HandleError(reader, true, initialDepth - 1);
                             }
                             else
                             {
@@ -2509,7 +2475,7 @@ namespace Newtonsoft.Json.Serialization
             {
                 try
                 {
-                    Required resolvedRequired = property._required ?? contract.ItemRequired ?? Required.Default;
+                    Required resolvedRequired = property.Ignored ? Required.Default : property._required ?? contract.ItemRequired ?? Required.Default;
 
                     switch (presence)
                     {

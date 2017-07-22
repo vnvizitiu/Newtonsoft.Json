@@ -28,7 +28,7 @@ using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 using Newtonsoft.Json.Serialization;
 using Newtonsoft.Json.Utilities;
-#if NET20
+#if !HAVE_LINQ
 using Newtonsoft.Json.Utilities.LinqBridge;
 #else
 using System.Linq;
@@ -216,35 +216,34 @@ namespace Newtonsoft.Json.Schema
 
         private void WriteType(string propertyName, JsonWriter writer, JsonSchemaType type)
         {
-            IList<JsonSchemaType> types;
-            if (System.Enum.IsDefined(typeof(JsonSchemaType), type))
+            if (Enum.IsDefined(typeof(JsonSchemaType), type))
             {
-                types = new List<JsonSchemaType> { type };
+                writer.WritePropertyName(propertyName);
+                writer.WriteValue(JsonSchemaBuilder.MapType(type));
             }
             else
             {
-                types = EnumUtils.GetFlagsValues(type).Where(v => v != JsonSchemaType.None).ToList();
+                IEnumerator<JsonSchemaType> en = EnumUtils.GetFlagsValues(type).Where(v => v != JsonSchemaType.None).GetEnumerator();
+                if (en.MoveNext())
+                {
+                    writer.WritePropertyName(propertyName);
+                    JsonSchemaType first = en.Current;
+                    if (en.MoveNext())
+                    {
+                        writer.WriteStartArray();
+                        writer.WriteValue(JsonSchemaBuilder.MapType(first));
+                        do
+                        {
+                            writer.WriteValue(JsonSchemaBuilder.MapType(en.Current));
+                        } while (en.MoveNext());
+                        writer.WriteEndArray();
+                    }
+                    else
+                    {
+                        writer.WriteValue(JsonSchemaBuilder.MapType(first));
+                    }
+                }
             }
-
-            if (types.Count == 0)
-            {
-                return;
-            }
-
-            writer.WritePropertyName(propertyName);
-
-            if (types.Count == 1)
-            {
-                writer.WriteValue(JsonSchemaBuilder.MapType(types[0]));
-                return;
-            }
-
-            writer.WriteStartArray();
-            foreach (JsonSchemaType jsonSchemaType in types)
-            {
-                writer.WriteValue(JsonSchemaBuilder.MapType(jsonSchemaType));
-            }
-            writer.WriteEndArray();
         }
 
         private void WritePropertyIfNotNull(JsonWriter writer, string propertyName, object value)
